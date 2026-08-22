@@ -43,3 +43,6 @@ formatted using AI:
     - odd rows flippped vertically
 
 - `mcon` vias at physical edges of pin polygon
+
+## CORRECTION:
+728 logic cells, NOT 738 (extra 10 diode cells got parsed)
