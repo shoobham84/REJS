@@ -1,16 +1,15 @@
-cmake_minimum_required(VERSION 3.23)
-
-project(rejs LANGUAGES CXX C)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/include
-	${CMAKE_CURRENT_SOURCE_DIR}/gdstk/include
+add_executable(parseGDS
+    parseGDS.cpp
 )
 
-link_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/build/gdstk/src
+target_include_directories(parseGDS 
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include 
 )
+
+target_link_libraries(parseGDS 
+    PRIVATE
+        gdstk::gdstk
+)
+
 

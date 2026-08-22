@@ -61,7 +61,7 @@ set(SOURCE_LIST
 
 # --- Library target ---
 
-add_library(gdstk STATIC ${SOURCE_LIST} ${HEADER_LIST} $<TARGET_OBJECTS:clipper>)
+add_library(gdstk SHARED ${SOURCE_LIST} ${HEADER_LIST} $<TARGET_OBJECTS:clipper>)
 add_library(gdstk::gdstk ALIAS gdstk)
 
 target_compile_features(gdstk PUBLIC cxx_std_11)
