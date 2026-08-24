@@ -87,11 +87,55 @@ constexpr bool isFiller(std::string_view Name) noexcept {
 // rectilin. polygon to rectangle: create using LLM
 namespace {
 
-void decomposeRectilinear() {
+void decompRectilinear(const gdstk::Polygon* poly, uint32_t layer, uint32_t datatype,
+                           std::vector<polygonRecord>& out, int& poly_id) {
+    const uint64_t nv = poly->point_array.count;
 
+    if (nv <= 4) {
+        gdstk::Vec2 bmin{}, bmax{};
+        poly->bounding_box(bmin, bmax);
+        out.push_back({poly_id++, layer, datatype, {bmin.x, bmin.y, bmax.x, bmax.y}});
+        return;
+    }
+
+    std::span<const gdstk::Vec2> pts(poly->point_array.items, nv);
+
+    std::vector<double> ys;
+    ys.reserve(nv);
+    for (const auto& pt : pts) ys.push_back(pt.y);
+    std::ranges::sort(ys);
+    ys.erase(std::ranges::unique(ys).begin(), ys.end());
+
+    std::vector<double> x_crossings;
+    for (size_t i = 0; i + 1 < ys.size(); ++i) {
+        const double y_lo = ys[i];
+        const double y_hi = ys[i + 1];
+        const double y_mid = (y_lo + y_hi) * 0.5;
+
+        x_crossings.clear();
+        for (uint64_t e = 0; e < nv; ++e) {
+            const uint64_t f = (e + 1) % nv;
+            const double ey = pts[e].y, fy = pts[f].y;
+            if (ey == fy) continue;
+
+            if ((ey <= y_mid && fy > y_mid) || (fy <= y_mid && ey > y_mid)) {
+                const double t = (y_mid - ey) / (fy - ey);
+                x_crossings.push_back(pts[e].x + t * (pts[f].x - pts[e].x));
+            }
+        }
+        std::ranges::sort(x_crossings);
+
+        for (size_t j = 0; j + 1 < x_crossings.size(); j += 2) {
+            const double x_lo = x_crossings[j];
+            const double x_hi = x_crossings[j + 1];
+            if (x_hi - x_lo < 1e-6) continue;
+
+            out.push_back({poly_id++, layer, datatype, {x_lo, y_lo, x_hi, y_hi}});
+        }
+    }
 }
 
-}
+} // namespace
 
 
 int main(int argc, char** argv) {
