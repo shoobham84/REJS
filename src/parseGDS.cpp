@@ -141,15 +141,15 @@ void decompRectilinear(const gdstk::Polygon* poly, uint32_t layer, uint32_t data
 int main(int argc, char** argv) {
     std::println("Standard cell and pin definition: ---------------------------------");
 
-    const char *gdsPath { "../puzzle.gds" };
-    const char *outJSON { "outputs/parsedCells.json"};
+    const std::string_view gdsPath { (argc > 1) ? argv[1] : "puzzle.gds"};
+    const char *outJSON { (argc > 2) ? argv[2] : nullptr };
 
     gdstk::ErrorCode err { gdstk::ErrorCode::NoError };
-    gdstk::Library gdsFile { gdstk::read_gds(gdsPath, 0, 0, nullptr, &err)};
+    gdstk::Library gdsFile { gdstk::read_gds(gdsPath.data(), 0, 0, nullptr, &err)};
 
     struct LibGuard {
-        gdstk::Library& l;
-        ~LibGuard() { l.free_all(); }
+        gdstk::Library& lib;
+        ~LibGuard() { lib.free_all(); }
     } guard{ gdsFile };
 
     if (err != gdstk::ErrorCode::NoError) {
@@ -165,13 +165,35 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    // find topcell
-    gdstk::Cell *top { gdsFile.get_cell("puzzle") };
-    if (!top) { std::println(stderr, "top cell of gds thing not found"); 
-        return EXIT_FAILURE; }
-
-
     std::println("Loaded library: {} count: {} unit: {} precision: {}", gdsFile.name, gdsFile.cell_array.count, gdsFile.unit, gdsFile.precision);
+
+    // find topcell
+    gdstk::Cell *topCell { gdsFile.get_cell("puzzle") }; // test
+    if (!topCell) { 
+        gdsFile.get_cell("adder_demo");  // test2
+    }
+
+    if (!topCell) {
+        gdstk::Array<gdstk::Cell *> topCells{};
+        gdstk::Array<gdstk::RawCell *> topRawCells{};
+
+        gdsFile.top_level(topCells, topRawCells);
+
+        if (topCells.count > 0) {
+            topCell = topCells[0];
+            if (topCells.count > 1) 
+                std::println(stderr, "{} top level cells found using {}", topCells.count, topCell->name);
+        }
+        topCells.clear();
+        topRawCells.clear();
+    }
+
+    if (!topCell) {
+        std::println(stderr, "Couldn't find top level cell bruh");
+        return EXIT_FAILURE;
+    }
+    std::println(stderr, "Top level cell: {} ", topCell->name);
+
 
 
     //extract pin definitions
