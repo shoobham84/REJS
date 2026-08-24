@@ -146,8 +146,8 @@ namespace {
 
 class ScopedPolygonArray {
 private:
-    void reset() noexcept {
-        for (auto i{0}; i < SP_Array.count; ++i) {
+    constexpr void reset() noexcept {
+        for (uint64_t i{0}; i < SP_Array.count; ++i) {
             if (SP_Array[i]) {
                 SP_Array[i]->clear();
                 gdstk::free_allocation(SP_Array[i]);
@@ -198,20 +198,12 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    if (err != gdstk::ErrorCode::NoError &&
-        err != gdstk::ErrorCode::MissingReference &&
-        err != gdstk::ErrorCode::UnsupportedRecord &&
-        err != gdstk::ErrorCode::UnofficialSpecification) {
-        std::println("failed to read gds file");
-        return 1;
-    }
-    
-    std::println("Loaded library: {} count: {} unit: {} precision: {}", gdsFile.name, gdsFile.cell_array.count, gdsFile.unit, gdsFile.precision);
+    std::println("Loaded library: {} count: {} unit: {} precision: {}", gdsFile.name ? gdsFile.name : "(unnamed)", gdsFile.cell_array.count, gdsFile.unit, gdsFile.precision);
 
     // find topcell
     gdstk::Cell *topCell { gdsFile.get_cell("puzzle") }; // test
     if (!topCell) { 
-        gdsFile.get_cell("adder_demo");  // test2
+        topCell = gdsFile.get_cell("adder_demo");  // test2
     }
 
     if (!topCell) {
