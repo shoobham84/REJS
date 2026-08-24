@@ -8,6 +8,7 @@
 #include <map>
 #include <span>
 #include <iostream>
+#include <vector>
 
 using Json = nlohmann::json;
 
@@ -195,6 +196,35 @@ int main(int argc, char** argv) {
     std::println(stderr, "Top level cell: {} ", topCell->name);
 
     // sref : structure references. extract cellplacement
+    std::vector<CellRecord> cells;
+    int cellID{0} ;
+    constexpr double RAD_TO_DEGREE { 180.0 / M_PI };
+
+    std::span<gdstk::Reference *> references(topCell->reference_array.items, topCell->reference_array.count);
+
+    for (const auto* ref : references) {
+        const char* rawName { (ref->type == gdstk::ReferenceType::Cell && ref->cell)
+                            ? ref->cell->name
+                            : (ref->type == gdstk::ReferenceType::Name ? ref->name : nullptr)
+        };
+
+        if (!rawName) continue;
+
+        const std::string_view refName { rawName };
+        if (isFiller(refName)) continue;
+
+        cells.push_back({
+            cellID++,
+            std::string(refName),
+            ref->origin.x,
+            ref->origin.y,
+            ref->rotation * RAD_TO_DEGREE,
+            ref->x_reflection
+        });
+    }
+
+    std::println(stderr, "Extracted {} cell placements from {}", cells.size(), topCell->reference_array.count);
+
 
     // extract interconnect polygon
         // topcell polygon
