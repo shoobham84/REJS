@@ -194,15 +194,15 @@ int main(int argc, char** argv) {
     }
     std::println(stderr, "Top level cell: {} ", topCell->name);
 
+    // sref : structure references. extract cellplacement
 
+    // extract interconnect polygon
+        // topcell polygon
+        // polygons from VIA* instances
 
-    //extract pin definitions
 
     std::println(stderr, "std cell library pin defs: ");
 
-    // extract functional pin placements from top cell
-    // extract top level io pad labels
-    //
     // serializw json
 
 }
