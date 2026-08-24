@@ -88,6 +88,9 @@ constexpr bool isFiller(std::string_view Name) noexcept {
 // rectilin. polygon to rectangle: create using LLM
 namespace {
 
+// non rectangular shapes (Lshaped, Tshaped, dumbell shaped routing wires) had cauased false spatial overlap problems in previous iterations of this project. 
+// The only *fix* could've been to treat the polygon as a simple discrete non-overlapping rectangle (decomposing them)
+// function written using LLM
 void decompRectilinear(const gdstk::Polygon* poly, uint32_t layer, uint32_t datatype,
                            std::vector<polygonRecord>& out, int& poly_id) {
     const uint64_t nv = poly->point_array.count;
@@ -226,9 +229,47 @@ int main(int argc, char** argv) {
     std::println(stderr, "Extracted {} cell placements from {}", cells.size(), topCell->reference_array.count);
 
 
-    // extract interconnect polygon
+    // extract metal routing and vias-- filter using Sky130 BEOL (google it brah) routing stack i.e. li1, mcon, met1-met5's vias (via1- via4)
+    std::vector<polygonRecord> polygons;
+    int polygonID{0};
         // topcell polygon
+    for(const auto& rlayer : ROUTING_LAYERS) {
+        const gdstk::Tag tag { gdstk::make_tag(rlayer.Layer ,rlayer.dataType) };
+        
+        gdstk::Array<gdstk::Polygon *> tmp{};
+        topCell->get_polygons(true, true, 0, true, tag, tmp);
+
+        for (auto j{0}; j < tmp.count; ++j) {
+            gdstk::Polygon *p = tmp[j];
+            decompRectilinear(p, gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
+
+            p->clear();
+            gdstk::free_allocation(p);
+        }
+        tmp.clear();
+    }
         // polygons from VIA* instances
+        for (const auto *ref : references) {
+            const char* raw_name = (ref->type == gdstk::ReferenceType::Cell && ref->cell) 
+                                ? ref->cell->name 
+                                : (ref->type == gdstk::ReferenceType::Name ? ref->name : nullptr);
+            if (!raw_name) continue;
+            
+            const std::string_view name{raw_name};
+            if (!name.starts_with("VIA_via") && name.starts_with("VIA_")) {
+                gdstk::Array<gdstk::Polygon*> tmp{};
+                ref->get_polygons(true, true, -1, false, 0, tmp);
+                for (uint64_t j = 0; j < tmp.count; ++j) {
+                    gdstk::Polygon* p = tmp[j];
+                    if (isRoutingTag(p->tag)) {
+                        decompRectilinear(p, gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
+                    }
+                    p->clear();
+                    gdstk::free_allocation(p);
+                }
+                tmp.clear();
+                }
+        }
 
 
     std::println(stderr, "std cell library pin defs: ");
