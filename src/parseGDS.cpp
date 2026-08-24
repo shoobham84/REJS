@@ -25,6 +25,47 @@ constexpr std::array<LayerDef, 11> ROUTING_LAYERS{
     {71, 44, "via4"}, {72, 20, "met5"},
 };
 
+struct CellRecord {
+    int id;
+    std::string cellType;
+    double x;
+    double y;
+    double rotation;
+    bool xReflected;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CellRecord, id,  cellType, x, y, rotation, xReflected);
+
+struct polygonRecord {
+    int id;
+    uint32_t Layer;
+    uint32_t dataType;
+    
+    std::array<double, 4> bBox; 
+
+    auto tiedbBox() const noexcept {
+        return std::tie(Layer, dataType, bBox[0], bBox[1],bBox[2], bBox[3]); // tie into tuple
+    }
+};
+
+constexpr std::string_view layerNameFor(uint32_t layer, uint32_t dataType) noexcept {
+    for (auto const&[ lr, dt, name ] : ROUTING_LAYERS) {
+        if (lr == layer && dt == dataType) return name;
+    }
+    return "idk bro";
+}
+
+// json helpa
+//
+void toJSON(Json& son, const polygonRecord& polygon) {
+    son = Json{
+        {"id", polygon.id},
+        {"layer", polygon.Layer},
+        {"datatype", polygon.dataType},
+        {"layer_name", layerNameFor(polygon.Layer, polygon.dataType)},
+        {"bbox", polygon.bBox}
+    };
+}
+
 constexpr bool isRoutingTag(gdstk::Tag tag) noexcept {
     const uint32_t layer { gdstk::get_layer(tag) };
     const uint32_t type { gdstk::get_type(tag)};
@@ -35,8 +76,6 @@ constexpr bool isRoutingTag(gdstk::Tag tag) noexcept {
 }
 
 
-namespace {
-
 constexpr bool isFiller(std::string_view Name) noexcept {
     if (!Name.starts_with("sky130_fd_sc_hd__")) return false;
     constexpr std::array<std::string_view, 4> filters{"tap", "decap", "diode", "fill"}; // diode was missin
@@ -44,23 +83,12 @@ constexpr bool isFiller(std::string_view Name) noexcept {
     return std::ranges::any_of(filters, [Name](auto f) { return Name.find(f) != std::string_view::npos; });
 }
 
-// paste ts yo
-constexpr bool isValidPinName(std::string_view Name) noexcept {
-    constexpr std::array<std::string_view, 29> ValidPins {
-        "A", "A0", "A1", "A1_N", "A2", "A2_N", "A3", "A4", "A_N",
-        "B", "B1", "B1_N", "B2", "B_N",
-        "C", "C1", "C_N", "CLK",
-        "D", "D1", "D_N",
-        "HI", "LO", "Q", "RESET_B", "S", "SET_B", "X", "Y"
-    };
 
-    return std::ranges::binary_search(ValidPins, Name);
-}
+// rectilin. polygon to rectangle: create using LLM
+namespace {
 
-constexpr bool is_flip_flop(std::string_view type) noexcept {
-    return type.find("dfrtp") != std::string_view::npos ||
-           type.find("dfstp") != std::string_view::npos ||
-           type.find("dfxtp") != std::string_view::npos;
+void decomposeRectilinear() {
+
 }
 
 }
@@ -103,37 +131,8 @@ int main(int argc, char** argv) {
 
 
     //extract pin definitions
-    std::map<std::string, std::vector<PinInfo> ,std::less<>> cellPinLibrary;
-    std::span<gdstk::Cell *> cells(gdsFile.cell_array.items, gdsFile.cell_array.count);
-    
-    for (const auto *c : cells) {
-        if (!isFiller(c->name)) continue;
-
-        std::span<gdstk::Label *> labels(c->label_array.items, c->label_array.count);
-
-        for (const auto* lbl : labels) {
-            if (!lbl->text) continue;
-
-            const std::string_view pname { lbl->text };
-            if (!isFiller(pname)) continue;
-
-            const uint32_t layer { gdstk::get_layer(lbl->tag)};
-            if (layer == 67 || layer == 68) {
-                cellPinLibrary[c->name].push_back({std::string(pname), layer, lbl->origin.x, lbl->origin.y});
-            }
-        }
-    }
 
     std::println(stderr, "std cell library pin defs: ");
-    std::println(stderr, "Loaded pin defs for {} cells", cellPinLibrary.size());
-
-    for (const auto& [cellname, pins] : cellPinLibrary) {
-        std::cerr << " " << std::left << std::setw(32) << cellname << " -> [ ";
-        for (auto p{0}; p < pins.size(); ++p) {
-            std::cerr << (p > 0 ? ", " : "") << pins[p].Name << "(layer" << pins[p].Layer << ")";
-        }
-        std::cerr << "]\n";
-    }
 
     // extract functional pin placements from top cell
     // extract top level io pad labels
