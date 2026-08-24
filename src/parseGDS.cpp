@@ -298,7 +298,20 @@ int main(int argc, char** argv) {
     }
 
 
-    std::println(stderr, "std cell library pin defs: ");
+    // remove duplicates
+    std::ranges::sort(polygons, [](const auto& a, const auto& b) {
+        return a.tiedbBox() < b.tiedbBox();
+    });
+
+    const auto[dropStart, dropEnd] = std::ranges::unique(polygons, [](const auto& a, const auto& b) {
+        return a.tiedbBox() == b.tiedbBox();
+    });
+    polygons.erase(dropStart, dropEnd);
+
+    for (auto i{0uz}; i < polygons.size(); ++i) {
+        polygons[i].id = static_cast<int>(i);
+    }
+    std::println("Extracted {} routing/contact polygons", polygons.size());
 
     // serializw json
     Json out_json_obj = Json::object();
