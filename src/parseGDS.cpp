@@ -9,6 +9,7 @@
 #include <span>
 #include <iostream>
 #include <vector>
+#include <fstream>
 
 using Json = nlohmann::json;
 
@@ -57,7 +58,7 @@ constexpr std::string_view layerNameFor(uint32_t layer, uint32_t dataType) noexc
 
 // json helpa
 //
-void toJSON(Json& son, const polygonRecord& polygon) {
+void to_json(Json& son, const polygonRecord& polygon) {
     son = Json{
         {"id", polygon.id},
         {"layer", polygon.Layer},
@@ -308,6 +309,23 @@ int main(int argc, char** argv) {
     std::println(stderr, "std cell library pin defs: ");
 
     // serializw json
+    Json out_json_obj = Json::object();
+    out_json_obj["cells"] = cells;
+    out_json_obj["polygons"] = polygons;
+
+    if (outJSON) {
+        std::ofstream fileOut(outJSON);
+        if (!fileOut) {
+            std::println(stderr, "ERROR: Cannot open {}", outJSON);
+            return EXIT_FAILURE;
+        }
+
+        fileOut << out_json_obj.dump(2) << '\n';
+        std::println(stderr, "Output written to {}", outJSON);
+    }
+    else {
+        println("{}", out_json_obj.dump(2));
+    }
 
 }
 
