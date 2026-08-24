@@ -141,6 +141,42 @@ void decompRectilinear(const gdstk::Polygon* poly, uint32_t layer, uint32_t data
 
 } // namespace
 
+namespace {
+
+class ScopedPolygonArray {
+private:
+    void reset() noexcept {
+        for (auto i{0}; i < SP_Array.count; ++i) {
+            if (SP_Array[i]) {
+                SP_Array[i]->clear();
+                gdstk::free_allocation(SP_Array[i]);
+            }
+        }
+        SP_Array.clear();
+    }
+
+public:
+    gdstk::Array<gdstk::Polygon *> SP_Array{};
+
+    ScopedPolygonArray() = default;
+    ~ScopedPolygonArray() {
+        reset();
+    }
+
+    ScopedPolygonArray(const ScopedPolygonArray&) = delete;
+    ScopedPolygonArray operator=(const ScopedPolygonArray&) = delete;
+
+    ScopedPolygonArray(ScopedPolygonArray&& other) noexcept
+    : SP_Array(other.SP_Array) {
+        other.SP_Array = {};
+    }
+
+    [[nodiscard]] std::span<gdstk::Polygon *> span() const noexcept {
+        return { SP_Array.items, SP_Array.count };
+    }
+};
+
+}
 
 int main(int argc, char** argv) {
     std::println("Standard cell and pin definition: ---------------------------------");
@@ -236,40 +272,37 @@ int main(int argc, char** argv) {
     for(const auto& rlayer : ROUTING_LAYERS) {
         const gdstk::Tag tag { gdstk::make_tag(rlayer.Layer ,rlayer.dataType) };
         
-        gdstk::Array<gdstk::Polygon *> tmp{};
-        topCell->get_polygons(true, true, 0, true, tag, tmp);
+        ScopedPolygonArray tmp;
+        topCell->get_polygons(true, true, 0, true, tag, tmp.SP_Array);
 
-        for (auto j{0}; j < tmp.count; ++j) {
-            gdstk::Polygon *p = tmp[j];
-            decompRectilinear(p, gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
-
-            p->clear();
-            gdstk::free_allocation(p);
+        for (const auto *p : tmp.span()) {
+            if (isRoutingTag(p->tag)) {
+                decompRectilinear(p, gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
+            }
         }
-        tmp.clear();
     }
-        // polygons from VIA* instances
-        for (const auto *ref : references) {
-            const char* raw_name = (ref->type == gdstk::ReferenceType::Cell && ref->cell) 
-                                ? ref->cell->name 
-                                : (ref->type == gdstk::ReferenceType::Name ? ref->name : nullptr);
-            if (!raw_name) continue;
-            
-            const std::string_view name{raw_name};
-            if (!name.starts_with("VIA_via") && name.starts_with("VIA_")) {
-                gdstk::Array<gdstk::Polygon*> tmp{};
-                ref->get_polygons(true, true, -1, false, 0, tmp);
-                for (uint64_t j = 0; j < tmp.count; ++j) {
-                    gdstk::Polygon* p = tmp[j];
-                    if (isRoutingTag(p->tag)) {
-                        decompRectilinear(p, gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
-                    }
-                    p->clear();
-                    gdstk::free_allocation(p);
+    
+    // polygons from VIA* instances
+    for (const auto *ref : references) {
+        const char* raw_name = (ref->type == gdstk::ReferenceType::Cell && ref->cell) 
+                            ? ref->cell->name 
+                            : (ref->type == gdstk::ReferenceType::Name ? ref->name : nullptr);
+        if (!raw_name) continue;
+        
+        const std::string_view name{raw_name};
+
+        if (!name.starts_with("VIA_via") && name.starts_with("VIA_")) {
+
+            ScopedPolygonArray tmp;
+            ref->get_polygons(true, true, -1, false, 0, tmp.SP_Array);
+
+            for (const auto *p : tmp.span()) {
+                if (isRoutingTag(p->tag)) {
+                    decompRectilinear(p ,gdstk::get_layer(p->tag), gdstk::get_type(p->tag), polygons, polygonID);
                 }
-                tmp.clear();
-                }
+            }
         }
+    }
 
 
     std::println(stderr, "std cell library pin defs: ");
