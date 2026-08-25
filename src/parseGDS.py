@@ -1,6 +1,7 @@
 import pya  #klayout
 import os
 import math
+import json
 
 gdsPath = "puzzle.gds" if os.path.exists("puzzle.gds") else "../puzzle.gds"
 
@@ -143,4 +144,76 @@ for idx, (via_lay, via_dt) in enumerate(vias):
         dsu.Union(node_b, node_a)
         bridged += 1
 
-    print(f" -> Bridged {bridged} / {via_shapes.size()} cuts")
+    print(f"-> Bridged {bridged} / {via_shapes.size()} cuts")
+
+print("Done tracin layers----------------------------")
+
+root_to_net = {}
+net_counter = 0
+def get_net(node):
+    global net_counter
+    r = dsu.Find(node)
+    if r not in root_to_net:
+        root_to_net[r] = net_counter
+        net_counter += 1
+    return root_to_net[r]
+
+# map cell instance pins
+jsonPath = "outputs/parsedCells.json" if os.path.exists("outputs/parsedCells.json") else "../outputs/parsedCells.json"
+with open(jsonPath) as f: p1 = json.load(f)
+
+top_orig = layout.top_cell()
+inst_pins = {}
+grid_li1 = spatialGrids[(67, 20)]
+plist_li1 = mergedPolygons[(67, 20)]
+
+for inst in top_orig.each_inst():
+    c = inst.cell
+    trans = inst.cplx_trans
+    ix, iy = trans.disp.x*dataBaseUnits, trans.disp.y*dataBaseUnits
+    rot_deg = trans.angle
+    is_mir = trans.is_mirror()
+
+    matching = [i for i in p1["cells"] if abs(i["x"] - ix) < 0.001 and abs(i["y"] - iy) < 0.001 and i["cell_type"] == c.name and abs(i["rotation"] - rot_deg) < 0.01 and i["x_reflection"] == is_mir]
+    if not matching: continue
+
+    iid = matching[0]["id"]
+    
+    for s in c.shapes(layout.layer(67, 5)).each():
+        if s.is_text():
+            t = s.text
+            pname = t.string
+            tp = t.transformed(trans)
+            gx, gy = tp.x, tp.y
+            pt_box = pya.Box(gx, gy, gx, gy)
+            
+            pt = pya.Point(gx, gy)
+            for pidx in queryCandidates(grid_li1, pt_box):
+                pb, poly = plist_li1[pidx]
+                if pb.contains(pt) and poly.inside(pt):
+                    nid = get_net(offsets[(67, 20)] + pidx)
+                    inst_pins[(iid, pname)] = nid
+                    break
+
+print(f"Mapped {len(inst_pins)} instance pins across {len(p1['cells'])} cells")
+
+# map toplevel pads on met3 (70/5)
+pad_to_net = {}
+grid_m3 = spatialGrids[(70, 20)]
+plist_m3 = mergedPolygons[(70, 20)]
+
+for s in top_orig.shapes(layout.layer(70, 5)).each():
+    if s.is_text():
+        t = s.text
+        pname = t.string
+        gx, gy = t.x, t.y
+        pt = pya.Point(gx, gy)
+        pt_box = pya.Box(gx, gy, gx, gy)
+        for pidx in queryCandidates(grid_m3, pt_box):
+            pb, poly = plist_m3[pidx]
+            if pb.contains(pt) and poly.inside(pt):
+                pad_to_net[pname] = get_net(offsets[(70, 20)] + pidx)
+                break
+
+print(f"Mapped pads: {pad_to_net}")
+print(f"Total unique electrical nets: {net_counter}")
