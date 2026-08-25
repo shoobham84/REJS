@@ -2,3 +2,7 @@ notes.md
 *py
 build/
 
+*.sh
+
+*.json
+
