@@ -9,21 +9,27 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+set(GDSTK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gdstk/CMakeLists.txt")
+    add_subdirectory(gdstk)
+endif()
+
 add_executable(parseGDS 
     src/parseGDS.cpp)
-
+target_include_directories(parseGDS    
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 target_link_libraries(parseGDS
     PRIVATE
         gdstk::gdstk
 )
 
-target_include_directories(parseGDS    
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 
-set(GDSTK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gdstk/CMakeLists.txt")
-    add_subdirectory(gdstk)
-endif()
+add_executable(extractNets
+    src/extractNets.cpp)
+target_include_directories(extractNets
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 
