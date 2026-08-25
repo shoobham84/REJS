@@ -29,13 +29,13 @@ constexpr std::array<LayerDef, 11> ROUTING_LAYERS{
 
 struct CellRecord {
     int id;
-    std::string cellType;
+    std::string cell_type;
     double x;
     double y;
     double rotation;
-    bool xReflected;
+    bool x_reflection;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CellRecord, id,  cellType, x, y, rotation, xReflected);
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CellRecord, id,  cell_type, x, y, rotation, x_reflection);
 
 struct polygonRecord {
     int id;
@@ -79,7 +79,7 @@ constexpr bool isRoutingTag(gdstk::Tag tag) noexcept {
 
 
 constexpr bool isFiller(std::string_view Name) noexcept {
-    if (!Name.starts_with("sky130_fd_sc_hd__")) return false;
+    if (!Name.starts_with("sky130_fd_sc_hd__")) return true;
     constexpr std::array<std::string_view, 4> filters{"tap", "decap", "diode", "fill"}; // diode was missin
 
     return std::ranges::any_of(filters, [Name](auto f) { return Name.find(f) != std::string_view::npos; });
