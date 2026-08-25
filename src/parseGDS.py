@@ -217,3 +217,63 @@ for s in top_orig.shapes(layout.layer(70, 5)).each():
 
 print(f"Mapped pads: {pad_to_net}")
 print(f"Total unique electrical nets: {net_counter}")
+
+# create verilog netlist
+cell_pin_library = {}
+for cell in layout.each_cell():
+    pins = set()
+    for s in cell.shapes(layout.layer(67, 5)).each():
+        if s.is_text():
+            pname = s.text.string
+            if pname not in ("VGND", "VPWR"):
+                pins.add(pname)
+    if pins:
+        cell_pin_library[cell.name] = sorted(list(pins))
+
+lines = []
+lines.append("`timescale 1ns/1ps")
+lines.append("module puzzle_extracted (clk, rst_n, enable, I, success, O);")
+lines.append("  input wire clk, rst_n, enable, I;")
+lines.append("  output wire success;")
+lines.append("  output wire [7:0] O;")
+lines.append("")
+for i in range(net_counter):
+    lines.append(f"  wire net_{i};")
+lines.append("")
+
+if "clk" in pad_to_net: lines.append(f"  assign net_{pad_to_net['clk']} = clk;")
+if "rst_n" in pad_to_net: lines.append(f"  assign net_{pad_to_net['rst_n']} = rst_n;")
+if "enable" in pad_to_net: lines.append(f"  assign net_{pad_to_net['enable']} = enable;")
+if "I" in pad_to_net: lines.append(f"  assign net_{pad_to_net['I']} = I;")
+if "success" in pad_to_net: lines.append(f"  assign success = net_{pad_to_net['success']};")
+for b in range(8):
+    ob = f"O[{b}]"
+    if ob in pad_to_net: lines.append(f"  assign O[{b}] = net_{pad_to_net[ob]};")
+
+lines.append("")
+
+for inst in p1["cells"]:
+    iid = inst["id"]
+    ctype = inst["cell_type"]
+    pnames = cell_pin_library.get(ctype, [])
+    port_maps = []
+    for pname in pnames:
+        if (iid, pname) in inst_pins:
+            port_maps.append(f".{pname}(net_{inst_pins[(iid, pname)]})")
+        elif pname in ("RESET_B", "SET_B"):
+            port_maps.append(f".{pname}(rst_n)")
+        elif pname in ("X", "Y", "Q", "HI", "LO"):
+            # Unrouted output port
+            port_maps.append(f".{pname}()")
+        else:
+            port_maps.append(f".{pname}(1'b0)")
+    lines.append(f"  {ctype} inst_{iid} (" + ", ".join(port_maps) + ");")
+
+lines.append("endmodule")
+
+out_v = "outputs/extracted_netlist.v" if os.path.exists("outputs") else "extracted_netlist.v"
+with open(out_v, "w") as f:
+    f.write("\n".join(lines) + "\n")
+
+print(f"Saved complete netlist to '{out_v}'!")
+
