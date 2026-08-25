@@ -9,27 +9,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(GDSTK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gdstk/CMakeLists.txt")
-    add_subdirectory(gdstk)
-endif()
+find_package(Python3 
+    COMPONENTS 
+        Interpreter REQUIRED)
 
-add_executable(parseGDS 
-    src/parseGDS.cpp)
-target_include_directories(parseGDS    
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+add_custom_target(solve
+    COMMAND ${CMAKE_COMMAND} -E echo "GDS Layout extraction"
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/parseGDS.py
 )
-target_link_libraries(parseGDS
-    PRIVATE
-        gdstk::gdstk
-)
-
-
-add_executable(extractNets
-    src/extractNets.cpp)
-target_include_directories(extractNets
-    PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
