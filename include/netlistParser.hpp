@@ -3,6 +3,9 @@
 #include <string>
 #include <ranges>
 #include <optional>
+#include <unordered_set>
+#include <unordered_map>
+#include <filesystem>
 
 namespace SAT
 {
@@ -31,4 +34,40 @@ struct CellInstance {
 	}
 };
 
+// netlist abstract syntax tree
+struct NetlistAST
+{
+	std::string moduleName;
+	std::vector<std::string> inputs;
+	std::vector<std::string> outputs;
+
+	std::unordered_set<std::string> allNets;
+
+	std::vector<CellInstance> instances;
+
+	std::unordered_map<std::string, std::string> assignments;
+
+
+	std::vector<size_t> flipFlopIndices;
+	std::vector<size_t> logicGateIndices;
+
+	void categorizeCells() {
+		flipFlopIndices.clear();
+		logicGateIndices.clear();
+
+		flipFlopIndices.reserve(instances.size() / 4);
+		logicGateIndices.reserve(instances.size());
+
+		for (auto i{0uz}; i < instances.size(); ++i) {
+			if (instances[i].isSequential())
+				flipFlopIndices.push_back(i);
+			else
+				logicGateIndices.push_back(i);
+		}
+	}
+};
+
+[[nodiscard]] NetlistAST parseVerilogNetlist(const std::filesystem::path& filepath);
+
+void printNetlistSummary(const NetlistAST& ast);
 }
