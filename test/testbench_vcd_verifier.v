@@ -17,7 +17,8 @@ module testbench_vcd_verifier();
     integer checks = 0;
 
     initial begin
-        $dumpfile("../outputs/simulation_output.vcd");
+        $dumpfile("outputs/sim_output.vcd");
+        $dumpvars(0, testbench_vcd_verifier);
 
         clk = 0;
 		rst_n = 0;
