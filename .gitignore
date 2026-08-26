@@ -8,4 +8,9 @@ build/
 
 asic_RE_junkbin/
 
-outputs/sim_verify
+/outputs/sim_verify
+
+/outputs/sim_*
+/outputs/all_zeros_and_ones
+*.vcd
+/outputs/*.vcd
