@@ -227,3 +227,38 @@ def simulate(sorted_gates, flip_flops, pad, num_cycles, get_input):
             dff_q = next_q
 
     return wire_maps
+
+
+def solve_key(sorted_gates, flip_flops, pad):
+    I_vars = [z3.Bool(f"I_{k}") for k in range(121)]
+
+    def get_input(t):
+        if t <= 1:
+            return z3.BoolVal(False), z3.BoolVal(False), z3.BoolVal(False)
+        rst = z3.BoolVal(True)
+        if 3 <= t <= 123:
+            return rst, z3.BoolVal(True), I_vars[t - 3]
+        return rst, z3.BoolVal(False), z3.BoolVal(False)
+
+    print('unrolling  126 cycles')
+    wire_maps = simulate(sorted_gates, flip_flops, pad, 126, get_input)
+
+    success_net = pad.get("success", "net_77")
+    success_expr = wire_maps[125][success_net]
+
+    solver = z3.Solver()
+    solver.add(success_expr == z3.BoolVal(True))
+
+    print("solving")
+    res = solver.check()
+    assert res == z3.sat, "UNSAT : no valid key"
+
+    model = solver.model()
+    key = [1 if z3.is_true(model.eval(v)) else 0 for v in I_vars]
+
+    print('proving uniqueness')
+    block = z3.Or([v != z3.BoolVal(bool(b)) for v, b in zip(I_vars, key)])
+    solver.add(block)
+    unique = solver.check() == z3.unsat
+
+    return key, unique
