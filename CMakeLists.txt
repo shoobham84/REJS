@@ -20,6 +20,14 @@ if(NOT IVERILOG_BIN OR NOT VVP_BIN)
     message(WARNING "iverilog or vvp not found in PATH.")
 endif()
 
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
+)
+
+add_executable(SAT_solver
+    src/netlistParser.cpp
+)
+
 add_custom_target(solve
     COMMAND ${CMAKE_COMMAND} -E echo " GDS Layout Extraction "
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/parseGDS.py
