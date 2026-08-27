@@ -167,3 +167,63 @@ def eval_gate(cell, gi):
     if ct == f"{_P}o2bb2a_2":  return z3.And(z3.Or(z3.Not(gi("A1_N")), z3.Not(gi("A2_N"))), z3.Or(gi("B1"), gi("B2")))
 
     raise ValueError(f"Unknown cell: {ct}")
+
+
+def simulate(sorted_gates, flip_flops, pad, num_cycles, get_input):
+
+    # init dflipflop states at t=0
+    dff_q = {}
+    for inst, cell, ports in flip_flops:
+        dff_q[inst] = z3.BoolVal(True) if "dfstp" in cell else z3.BoolVal(False)
+
+    wire_maps = []
+
+    for t in range(num_cycles):
+        rst_n, enable, i_val = get_input(t)
+        w = {"1'b0": z3.BoolVal(False), "1'b1": z3.BoolVal(True)}
+
+        if "rst_n" in pad:  w[pad["rst_n"]]  = rst_n
+        if "enable" in pad: w[pad["enable"]] = enable
+        if "I" in pad:      w[pad["I"]]      = i_val
+
+        for inst, cell, ports in flip_flops:
+            qn = ports.get("Q", "")
+            if qn:
+                w[qn] = dff_q[inst]
+
+        def get_net(net, _w=w, _t=t):
+            if not net or net == "1'b0": return z3.BoolVal(False)
+            if net == "1'b1":           return z3.BoolVal(True)
+            if net not in _w:
+                _w[net] = z3.Bool(f"{net}_t{_t}")
+            return _w[net]
+
+        for inst, cell, ports in sorted_gates:
+            if cell == f"{_P}conb_1":
+                if "HI" in ports: w[ports["HI"]] = z3.BoolVal(True)
+                if "LO" in ports: w[ports["LO"]] = z3.BoolVal(False)
+                continue
+
+            gi = lambda pin, _ports=ports: get_net(_ports.get(pin, ""))
+            val = eval_gate(cell, gi)
+
+            for pin in ("X", "Y"):
+                if pin in ports:
+                    w[ports[pin]] = val
+                    break
+
+        wire_maps.append(w)
+
+        if t + 1 < num_cycles:
+            next_q = {}
+            for inst, cell, ports in flip_flops:
+                d_val = get_net(ports.get("D", "1'b0"))
+                if "dfrtp" in cell:
+                    next_q[inst] = z3.If(z3.Not(rst_n), z3.BoolVal(False), d_val)
+                elif "dfstp" in cell:
+                    next_q[inst] = z3.If(z3.Not(rst_n), z3.BoolVal(True), d_val)
+                else:
+                    next_q[inst] = d_val
+            dff_q = next_q
+
+    return wire_maps
