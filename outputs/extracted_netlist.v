@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module puzzle_extracted (clk, rst_n, enable, I, success, O);
+module extracted_netlist (clk, rst_n, enable, I, success, O);
   input wire clk, rst_n, enable, I;
   output wire success;
   output wire [7:0] O;

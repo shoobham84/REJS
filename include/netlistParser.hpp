@@ -7,8 +7,9 @@
 #include <unordered_map>
 #include <filesystem>
 
-namespace SAT
+namespace PN
 {
+
 
 struct PinBinding {
 	std::string pinName;   // A, B, CLK, Y
@@ -67,7 +68,9 @@ struct NetlistAST
 	}
 };
 
+void printNetlistSummary(const NetlistAST& ast);
+
+
 [[nodiscard]] NetlistAST parseVerilogNetlist(const std::filesystem::path& filepath);
 
-void printNetlistSummary(const NetlistAST& ast);
 }
