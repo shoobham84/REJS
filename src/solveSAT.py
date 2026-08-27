@@ -262,3 +262,51 @@ def solve_key(sorted_gates, flip_flops, pad):
     unique = solver.check() == z3.unsat
 
     return key, unique
+
+def extract_flag(sorted_gates, flip_flops, pad, key):
+    def get_input(t):
+        if t <= 1:
+            return z3.BoolVal(False), z3.BoolVal(False), z3.BoolVal(False)
+        rst = z3.BoolVal(True)
+        if 3 <= t <= 123:
+            return rst, z3.BoolVal(True), z3.BoolVal(bool(key[t - 3]))
+        return rst, z3.BoolVal(False), z3.BoolVal(False)
+
+    print(" Replaying 145 cycles with solved key ")
+    wire_maps = simulate(sorted_gates, flip_flops, pad, 145, get_input)
+
+    flag_chars = []
+    for t in range(125, 141):
+        w = wire_maps[t]
+        byte_val = 0
+        for b in range(8):
+            o_net = pad.get(f"O[{b}]", "")
+            bit_expr = w.get(o_net, z3.BoolVal(False))
+            if z3.is_true(z3.simplify(bit_expr)):
+                byte_val |= (1 << b)
+        if 32 <= byte_val <= 126:
+            flag_chars.append(chr(byte_val))
+
+    return "".join(flag_chars)
+
+def main():
+    logic_gates, flip_flops, pad = parse_netlist("outputs/extracted_netlist.v")
+    sorted_gates = topologicalSort(logic_gates)
+
+    key, unique = solve_key(sorted_gates, flip_flops, pad)
+    bitstream = "".join(str(b) for b in key)
+
+    flag = extract_flag(sorted_gates, flip_flops, pad, key)
+
+    print('\n')
+    print("*" * 50)
+    print("                    FINAL PUZZLE KEY")
+    print("*" * 50)
+    print(f" FLAG:   {flag}")
+    print(f" KEY:    {bitstream}")
+    print(f" UNIQUE: {'YES' if unique else 'NO'}")
+    print("*" * 50)
+
+
+if __name__ == "__main__":
+    main()
