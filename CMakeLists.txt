@@ -22,6 +22,12 @@ endif()
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/z3/src/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/z3/src/api/c++
+)
+
+link_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/z3/build
 )
 
 add_executable(SAT_solver
