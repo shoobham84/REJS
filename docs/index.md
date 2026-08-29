@@ -31,6 +31,36 @@ JS provided a [repository](https://github.com/janestreet/asic-puzzle-2026) with
 ![Layout of the puzzle](assets/layout.png)
 The physical layout of the circuit.
 
+# Quick Terminology Guide
+
+Before diving into the reverse engineering, let's clarify the key terms we will be tossing around so everyone is on the same page:
+
+* **Cells vs. Instances:**
+  * **Cell (Master Blueprint):** A standard library template (e.g. `sky130_fd_sc_hd__nand2_2`). Think of it as a LEGO block design in the manual.
+  * **Instance:** A specific, physical copy of that cell placed at a coordinate on the chip (e.g. `inst_42` placed at $x = 97.52\,\mu\text{m}, y = 70.72\,\mu\text{m}$).
+
+* **Ports vs. Instance Pins:**
+  * **Port:** The named input/output terminal on a cell's blueprint (e.g. inputs `A`, `B`, and output `Y` for an AND gate).
+  * **Instance Pin:** The actual microscopic metal contact point on Layer 67 (`li1`) of a specific instance where wires attach. There are **2,791 instance pins** across our 728 gates.
+
+* **Metal Polygons vs. Interconnects (Vias):**
+  * **Metal Polygons:** 2D horizontal metal shapes drawn on a single conductor layer (`li1`, `met1` ... `met5`). They act as horizontal hallways for electrons on that floor.
+  * **Interconnect / Vias:** Vertical metal plugs (`mcon`, `via1` ... `via4`) that bridge adjacent metal layers vertically.
+
+* **Nets (Electrical Wires):**
+  * When touching polygons on the same layer and vertical vias between layers are united together, they form one continuous electrical wire called a **Net** (`net_15`). 
+
+* **I/O Pads (External World):**
+  * Big metal landing squares on the chip's top surface (Layer 70 `met3`) where test probes or package pins connect. This chip has **13 top-level pads**: 4 inputs (`clk`, `rst_n`, `enable`, `I`) and 9 outputs (`success`, `O[7:0]`) as seen from the layout image.
+
+```verilog
+//                                Cell Port Names (.A, .B, .Y)
+//                                │     │     │
+sky130_nand2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
+//    ▲         ▲         └─────┬──┘
+//  Cell      Instance    Nets (continuous 3D wires)
+```
+
 
 
 # RE'ing it!
@@ -77,7 +107,9 @@ Mapping the layers from the skywater 130nm pdk, we get a table of the physical l
 | met5 (drawing) | 72 / 20 | Metal 5 (Al/Cu) | Global supply rails (18 segments) |
 
 
+
 ## The Plan
+
 
 The plan is pretty simple, it'll go in steps:
 1. We parse the GDS file, parsing the cells , all the polygons, all the pads
@@ -148,7 +180,7 @@ Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *ev
 > This would take around *420 million* operations ($O(V \cdot P)$),, quite a hefty amount of minutes I'd say.
 
 How do we solve this then? We don't have an eternity to get the key?!
-WELL I borrowed really cool trick from video game collision engines! Enter...
+WELL I borrowed a really cool trick from video game collision engines! Enter...
 
 ### a 2D Spatial Hash Grid
 
@@ -159,8 +191,8 @@ The idea is simple:
 2. For every merged polygon $P_i$ with bounding box $[x_{\text{min}}, y_{\text{min}}, x_{\text{max}}, y_{\text{max}}]$:
 
  compute integer spatial cell ranges:
-   $$gx_{\text{start}} = \lfloor x_{\text{min}} / \text{CELL\_SIZE} \rfloor, \quad gx_{\text{end}} = \lfloor x_{\text{max}} / \text{CELL\_SIZE} \rfloor$$
-   $$gy_{\text{start}} = \lfloor y_{\text{min}} / \text{CELL\_SIZE} \rfloor, \quad gy_{\text{end}} = \lfloor y_{\text{max}} / \text{CELL\_SIZE} \rfloor$$
+   $$gx_{\text{start}} = \lfloor x_{\text{min}} / \text{CELL_SIZE} \rfloor, \quad gx_{\text{end}} = \lfloor x_{\text{max}} / \text{CELL_SIZE} \rfloor$$
+   $$gy_{\text{start}} = \lfloor y_{\text{min}} / \text{CELL_SIZE} \rfloor, \quad gy_{\text{end}} = \lfloor y_{\text{max}} / \text{CELL_SIZE} \rfloor$$
 
  insert polygon index $i$ into every intersecting bucket:
    $$\forall (gx, gy) \in [gx_{\text{start}}, gx_{\text{end}}] \times [gy_{\text{start}}, gy_{\text{end}}]: \quad \text{grid}[(gx, gy)].\text{append}(i)$$
@@ -178,6 +210,21 @@ After processing all 33,323 via unions:
 1. Iterate every node $u \in [0, 12614]$.
 2. Compute canonical representative root: $r = \text{DSU.find}(u)$.
 3. Assign contiguous integer Net IDs $0, 1, 2, \dots, 740$:
-   $$\text{root\_to\_net}[r] \to \text{Net ID}$$
+   $$\text{root_to_net}[r] \to \text{Net ID}$$
 
 > This gives us 741 totoal unique electrical nets.
+
+### Pin Mapping 
+
+For each standard cell instance identified:
+
+1. We extract cell boundary pin text labels on layer (67, 5) (e.g. text "A" at local coordinate $(lx, ly)$).
+2. Then transform local text coordinate to global die coordinate $(gx, gy)$.
+3. Query `spatial_grids[(67, 20)]` using point bounding box $[gx, gy, gx, gy]$.
+4. Perform exact point-in-polygon containment:
+   $$\text{Hit if: } P_{\text{bbox}}.\text{contains}(gx, gy) \land P_{\text{poly}}.\text{inside}(gx, gy)$$
+5. Find the Net ID of the enclosing li1 polygon:
+   $$\text{net_id} = \text{get_net}(\text{offset}[(67, 20)] + \text{idx}(P_{\text{poly}}))$$
+   $$\text{inst_pins}[(\text{instance_id}, \text{pin_name})] = \text{net_id}$$
+
+
