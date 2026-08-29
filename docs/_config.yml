@@ -1,6 +1,6 @@
 title: "Reverse Engineering Jane Street's ASIC"
 description: "From the GDS file to the hidden flag"
-theme: jekyll-theme-minimal
+theme: hacker
 markdown: kramdown
 
 kramdown:
