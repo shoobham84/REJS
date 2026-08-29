@@ -1,4 +1,4 @@
-Link to original Jane Street [blog](https://blog.janestreet.com/can-you-reverse-engineer-an-asic/)
+Link to the original Jane Street [blog](https://blog.janestreet.com/can-you-reverse-engineer-an-asic/)
 
 # A short introduction 
 Hello! My name is Shubham, I am pursuing bachelors of technology in Computer Science at MAIT, Delhi, Batch 2025-2029.
@@ -37,6 +37,7 @@ Viewing the `puzzle.gds` file in klayout shows us....
 well...yeah this is quite a bit of a mess :,) Lets decode it
 
 -> On the left, we see the circuit, the circuit's true layout and how it would look if processed and manufactured in a semiconductor facility. 
+
 -> On the right we see various *layers*, which can be toggled on and off within klayout. 
 
 The metal stack for the SkyWater130 nm PDK looks something like this:
@@ -83,11 +84,16 @@ The plan is pretty simple, it'll go in steps:
 We used `pya` inside python, which is the official Python API binding for KLayout for parsing `puzzle.gds`.
 The only goal of parsing the GDS file is to find the connections of the circuit, which will be used to extract and generate a ***netlist*** file of the logic gates. 
 
-We filter out the physical cells that contain no input or output pins (`tap..`, `decap..`, `diode..`, `fill..`). These cells are only for physical manufacturing and don't carry any logic signals. Out of the 9,875 total placed cells in the raw GDS, filtering these leaves us with exactly **728 functional logic cells**.
+We filter out the physical cells that contain no input or output pins (`tap..`, `decap..`, `diode..`, `fill..`). These cells are only for physical manufacturing and don't carry any logic signals. 
+
+Out of the 9,875 total placed cells in the raw GDS, filtering these leaves us with exactly **728 functional logic cells**.
 
 > The DBU: DataBaseUnits for this ASIC is nanometers.
 
 > The standard cell rows have fixed heights of 2720 DBU (2.72 um) and pitch width quantized in multiples of 460 DBU.
+
+> • Even rows are oriented normally (R0), spanning [y_0, y_0 + 2.72 um].  
+> • Odd rows are inverted (180 degree rotation R180 or reflected along X MX), spanning [y_0 - 2.72um, y_0].
 
 ### Storing our Cell Inventory (`parsedCells.json`)
 
@@ -106,4 +112,12 @@ sky130_fd_sc_hd__nand2_2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
 ```
 
 To know where a pin actually lands on the full die, we take the local pin coordinates from inside the cell definition and apply an **affine transformation** (`inst.cplx_trans` in `pya`). This handles the rotation, row-mirroring, and (x, y) displacement to find the exact global (X, Y) spot on the silicon die where the wire connects.
+
+## Its Union Time! <sub>*starts unioning all over the place*</sub>
+
+<img src="assets/schewpid_polygon_meme.png" alt="schewpid union meme" style="max-width: 50%; height: auto; display: block; margin: 1.5rem auto;" />
+ 
+Uniting the polygons will take place in two stages:
+- Intra-layer: shapes overlapping or touching the same conductor layer are electrically connected
+- Inter-layer: shapes on adjacent layers are electrically connected iff they are bridged by a physical interconnect (`mcon`s or `via`s)
 
