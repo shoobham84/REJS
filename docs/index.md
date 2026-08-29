@@ -113,7 +113,7 @@ sky130_fd_sc_hd__nand2_2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
 
 To know where a pin actually lands on the full die, we take the local pin coordinates from inside the cell definition and apply an **affine transformation** (`inst.cplx_trans` in `pya`). This handles the rotation, row-mirroring, and (x, y) displacement to find the exact global (X, Y) spot on the silicon die where the wire connects.
 
-## Its Union Time! <sub>*starts unioning all over the place*</sub>
+## Its Union Time! <sub>*\*starts unionising all over the place\**</sub>
 
 <img src="assets/schewpid_polygon_meme.png" alt="schewpid union meme" style="max-width: 50%; height: auto; display: block; margin: 1.5rem auto;" />
  
@@ -121,3 +121,53 @@ Uniting the polygons will take place in two stages:
 - Intra-layer: shapes overlapping or touching the same conductor layer are electrically connected
 - Inter-layer: shapes on adjacent layers are electrically connected iff they are bridged by a physical interconnect (`mcon`s or `via`s)
 
+We will be using a *Disjoint Set Union* for the following. 
+
+Layer Lk, adjacent layer Lk+1, interconnect polygon V, interconnect layer Ck
+   $$(P_{\text{below}} \cap V) \neq \emptyset \land (P_{\text{above}} \cap V) \neq \emptyset$$
+   
+We flatten the design's structural hierarchy to the top-level cell; this moves all internal subcell polygons into a single global coordinate space, making polygon merging and spatial lookup much easier.
+
+> We parse a total of 12,615 merged continuous polygons across the 6 layers, acting as the nodes of the graph.
+
+> We parse a total of 33,323 interconnects across the entire chip
+
+Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **4.2 * 10^8** operations!
+
+> [!WARNING]
+> This would take around *420 million* operations ($O(V \cdot P)$),, quite a hefty amount of minutes I'd say.
+
+How do we solve this then? We don't have an eternity to get the key?!
+WELL I borrowed really cool trick from video game collision engines! Enter...
+
+### a 2D Spatial Hash Grid
+
+The idea is simple:
+
+1. We divide the silicon floorplan into a 2.0 * 2.0 um^2 spatial buckets. (`CELL_SIZE = 2000 DBU`)
+
+2. For every merged polygon $P_i$ with bounding box $[x_{\text{min}}, y_{\text{min}}, x_{\text{max}}, y_{\text{max}}]$:
+
+ compute integer spatial cell ranges:
+   $$gx_{\text{start}} = \lfloor x_{\text{min}} / \text{CELL\_SIZE} \rfloor, \quad gx_{\text{end}} = \lfloor x_{\text{max}} / \text{CELL\_SIZE} \rfloor$$
+   $$gy_{\text{start}} = \lfloor y_{\text{min}} / \text{CELL\_SIZE} \rfloor, \quad gy_{\text{end}} = \lfloor y_{\text{max}} / \text{CELL\_SIZE} \rfloor$$
+
+ insert polygon index $i$ into every intersecting bucket:
+   $$\forall (gx, gy) \in [gx_{\text{start}}, gx_{\text{end}}] \times [gy_{\text{start}}, gy_{\text{end}}]: \quad \text{grid}[(gx, gy)].\text{append}(i)$$
+
+3. When querying a via bounding box $V = [vx_1, vy_1, vx_2, vy_2]$, only candidates in buckets spanning $V$ are inspected:
+
+$$\text{Candidates}(V) = \bigcup_{gx, gy \in \text{Cover}(V)} \text{grid}[(gx, gy)]$$
+
+This reduces candidate polygon evaluations from 12,615 down to 1–4 polygons per via, dropping the search complexity to $O(1)$ average time per cut.
+
+We put the connected polygons across 12'615 nodes in the DSU.
+
+After processing all 33,323 via unions:
+
+1. Iterate every node $u \in [0, 12614]$.
+2. Compute canonical representative root: $r = \text{DSU.find}(u)$.
+3. Assign contiguous integer Net IDs $0, 1, 2, \dots, 740$:
+   $$\text{root\_to\_net}[r] \to \text{Net ID}$$
+
+> This gives us 741 totoal unique electrical nets.
