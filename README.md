@@ -1,4 +1,4 @@
-# Reverse Engineering Jane Street's ASIC (REJS)
+# Reverse Engineering Jane Street's ASIC (2026 Challenge) (REJS)
 End-to-end automated reverse-engineering, dynamic waveform simulation, and formal Z3 SAT solver pipeline for the SkyWater 130nm ASIC puzzle.
 
 ## Prerequisites & Dependencies
