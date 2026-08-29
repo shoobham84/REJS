@@ -16,5 +16,5 @@ JS provided a [repository](https://github.com/janestreet/asic-puzzle-2026) with
 - `layout.png` : the physical layout of the circuit
 - and a `warmup/` directory, which is a test repo where you can test out your solutions. This subrepo helps a ton as it provides a way for us to confirm if the solver we are building is actually correct. I had done a lot of tests on this warmup directory to get a working plan of the solver.
 
-![Layout of the puzzle](../puzzle.gds)
+![Layout of the puzzle](assets/layout.png)
 The physical layout of the circuit.
