@@ -64,3 +64,46 @@ Mapping the layers from the skywater 130nm pdk, we get a table of the physical l
 | via4 (cut) | 71 / 44 | Via 4 | Via cuts connecting met4 ↔ met5 (108 cuts) |
 | met5 (drawing) | 72 / 20 | Metal 5 (Al/Cu) | Global supply rails (18 segments) |
 
+
+## The Plan
+
+The plan is pretty simple, it'll go in steps:
+1. We parse the GDS file, parsing the cells , all the polygons, all the pads
+2. We take a union of all the overlapping polygons 
+3. We then parse the interconnects, connecting adjacent layer's interconnects and union them, hence finding all the connections present in the ASIC 
+4. We store all the data we have gotten in a JSON format
+5. We generate a netlist from the parsed cells, polygons and pads
+6. We point a SAT solver at the extracted netlist, set constraints and find the exact key at which we get `success == 1`
+7. ???
+8. Profit! Uh- I mean we get the hidden flag!
+
+
+## Parsing the GDS File
+
+We used `pya` inside python, which is the official Python API binding for KLayout for parsing `puzzle.gds`.
+The only goal of parsing the GDS file is to find the connections of the circuit, which will be used to extract and generate a ***netlist*** file of the logic gates. 
+
+We filter out the physical cells that contain no input or output pins (`tap..`, `decap..`, `diode..`, `fill..`). These cells are only for physical manufacturing and don't carry any logic signals. Out of the 9,875 total placed cells in the raw GDS, filtering these leaves us with exactly **728 functional logic cells**.
+
+> The DBU: DataBaseUnits for this ASIC is nanometers.
+
+> The standard cell rows have fixed heights of 2720 DBU (2.72 um) and pitch width quantized in multiples of 460 DBU.
+
+### Storing our Cell Inventory (`parsedCells.json`)
+
+One quirk with raw GDSII files is that placed cell instances don't have human-readable Verilog names like `inst_0`, `inst_1`, etc. The GDS file just knows "put a NAND gate at coordinate (x, y) with this rotation".
+
+So, we create a master inventory of all 728 functional cells and store them in `outputs/parsedCells.json`. Each cell gets:
+- A unique deterministic ID (`0` to `727`)
+- Its cell type (e.g. `sky130_fd_sc_hd__nand2_2`)
+- Its exact physical placement (x, y) on the chip
+- Its rotation angle and whether it is mirrored (standard cell rows alternate flipping so adjacent rows can share power rails)
+
+Later, we will figure out which wires touch which cell pins using the JSON, which maps the coordinates back to these IDs to cleanly generate our Verilog instances:
+
+```verilog
+sky130_fd_sc_hd__nand2_2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
+```
+
+To know where a pin actually lands on the full die, we take the local pin coordinates from inside the cell definition and apply an **affine transformation** (`inst.cplx_trans` in `pya`). This handles the rotation, row-mirroring, and (x, y) displacement to find the exact global (X, Y) spot on the silicon die where the wire connects.
+
