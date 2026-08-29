@@ -1,3 +1,14 @@
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 Link to the original Jane Street [blog](https://blog.janestreet.com/can-you-reverse-engineer-an-asic/)
 
 # A short introduction 
@@ -134,7 +145,6 @@ We flatten the design's structural hierarchy to the top-level cell; this moves a
 
 Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **4.2 * 10^8** operations!
 
-> [!WARNING]
 > This would take around *420 million* operations ($O(V \cdot P)$),, quite a hefty amount of minutes I'd say.
 
 How do we solve this then? We don't have an eternity to get the key?!
