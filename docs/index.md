@@ -54,10 +54,10 @@ Before diving into the reverse engineering, let's clarify the key terms we will 
   * Big metal landing squares on the chip's top surface (Layer 70 `met3`) where test probes or package pins connect. This chip has **13 top-level pads**: 4 inputs (`clk`, `rst_n`, `enable`, `I`) and 9 outputs (`success`, `O[7:0]`) as seen from the layout image.
 
 ```verilog
-//                                Cell Port Names (.A, .B, .Y)
-//                                │     │     │
+//                  Cell Port Names (.A, .B, .Y)
+//                     │           │           │
 sky130_nand2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
-//    ▲         ▲         └─────┬──┘
+//    ▲         ▲         └─────┬─────┘────────────────┘
 //  Cell      Instance    Nets (continuous 3D wires)
 ```
 
@@ -218,7 +218,7 @@ After processing all 33,323 via unions:
 
 For each standard cell instance identified:
 
-1. We extract cell boundary pin text labels on layer (67, 5) (e.g. text "A" at local coordinate $(lx, ly)$).
+1. We extract cell boundary pin text labels on layer (67, 5) (e.g. text "A" at local coordinate $(lx, ly)$.
 2. Then transform local text coordinate to global die coordinate $(gx, gy)$.
 3. Query `spatial_grids[(67, 20)]` using point bounding box $[gx, gy, gx, gy]$.
 4. Perform exact point-in-polygon containment:
@@ -227,4 +227,68 @@ For each standard cell instance identified:
    $$\text{net_id} = \text{get_net}(\text{offset}[(67, 20)] + \text{idx}(P_{\text{poly}}))$$
    $$\text{inst_pins}[(\text{instance_id}, \text{pin_name})] = \text{net_id}$$
 
+> 2'791 instance pins get mapped across all 728 logic cells.
 
+### Top-Level I/O Pad Extraction
+
+Now that the internal cell pins are mapped, we need to locate the **external chip interface** (the landing pads where external signals connect to the chip).
+
+In SkyWater 130 nm, top-level I/O pad text labels are placed on the highest global routing layer, **Metal 3** on layer `(70, 5)`:
+
+1. We scan all text shapes on layer `(70, 5)` in the top cell:
+   $$\text{Pad Labels} = \{\text{clk}, \text{rst\_n}, \text{enable}, \text{I}, \text{success}, \text{O}[0], \dots, \text{O}[7]\}$$
+
+2. For each pad text at global coordinate $(gx, gy)$, we query `spatial_grids[(70, 20)]`.
+
+3. Then we check for point-in-polygon containment on the enclosing `met3` (70, 20) polygon:
+   $$\text{Hit if: } P_{\text{bbox}}.\text{contains}(gx, gy) \land P_{\text{poly}}.\text{inside}(gx, gy)$$
+
+4. Finally, we assign the corresponding Net ID to each pad:
+   $$\text{pad_to_net}[\text{pad\_name}] = \text{get_net}(\text{offset}[(70, 20)] + \text{idx}(P_{\text{poly}}))$$
+
+This maps all 13 top-level pads to their internal circuit nets:
+* **Inputs:** `clk` $\to$ `net_271`, `rst_n` $\to$ `net_73`, `enable` $\to$ `net_396`, `I` $\to$ `net_14`
+* **Outputs:** `success` $\to$ `net_77`, `O[0..7]` $\to$ `net_65`, `net_157`, `net_67`, `net_113`, `net_112`, `net_82`, `net_123`, `net_80`
+
+---
+
+## Net Binding & Generating `extracted_netlist.v`
+
+With both instance pins and top-level I/O pads mapped to their Net IDs, we can finally emit the structural Verilog netlist:
+
+1. **We declare Module & Wires:** Define module ports and instantiate all **741 internal wires** (`wire net_0;` to `wire net_740;`).
+
+    ```verilog
+    `timescale 1ns/1ps
+    module puzzle_extracted (clk, rst_n, enable, I, success, O);
+      input wire clk, rst_n, enable, I;
+      output wire success;
+      output wire [7:0] O;
+    ```
+
+    ```verilog
+    wire net_0;
+    wire net_1;
+    ...
+    wire net_740;
+    ```
+
+2. **Binding Top-Level Pads:** We add continuous `assign` statements connecting the external input/output ports to internal Net IDs:
+
+   ```verilog
+   assign net_271 = clk;
+   assign net_73  = rst_n;
+   assign net_396 = enable;
+   assign net_14  = I;
+   assign success = net_77;
+   assign O[0]    = net_65;
+   // ...
+   ```
+
+3. **Instantiating Standard Cells:** We iteratre through our `parsedCells.json` database and wire up each gate using `inst_pins[(iid, pin_name)]`:
+   ```verilog
+   sky130_fd_sc_hd__nand2_2 inst_0 (.A(net_15), .B(net_88), .Y(net_104));
+   sky130_fd_sc_hd__dfrtp_2 inst_26 (.CLK(net_271), .D(net_74), .Q(net_44), .RESET_B(net_73));
+   ```
+
+The output is written directly to `outputs/extracted_netlist.v`. We have officially extracted a complete and fully connected gate-level Verilog netlist straight from the polygons!
