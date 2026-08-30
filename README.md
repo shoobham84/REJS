@@ -5,24 +5,23 @@ End-to-end automated reverse-engineering, dynamic waveform simulation, and forma
 
 ### 1. System Packages
 Install `cmake` and `iverilog` (Icarus Verilog) via your system package manager (you can do it!)
+
 ### 2. Python Packages
 Install the required Python packages (`z3-solver` and `klayout`):
 ```bash
 pip install z3-solver klayout
 ```
 
-## Setup
+
+## Setup and run
 Clone the repository:
 ```bash
 git clone https://github.com/shoobham84/REJS.git
 cd REJS
-```
-
-### Run the Full Pipeline (One Command)
-```bash
 cmake -B build -S .
 cmake --build build --target solve
 ```
+
 
 ## Running Individual Steps Manually
 
@@ -55,6 +54,9 @@ python3 src/solveSAT.py
 
 ## Output Artifacts
 All generated outputs will be written to the `outputs/` directory:
+
+The waveform dumps can be viewed in a software like `gtkwave`
+
 * `outputs/extracted_netlist.v` — Complete gate-level Verilog netlist (728 cells, 741 nets)
 * `outputs/sim_output.vcd` — Dynamic simulation waveform dump
-* `outputs/all_zeros_and_ones.vcd` — Easter egg waveform dump
+* `outputs/all_zeros_and_ones.vcd` — Edge cases (all inputs as zeros and ones) waveform dump
