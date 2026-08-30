@@ -432,9 +432,9 @@ Errors:       0
 
 ![Our netlist generates the exact same waveform as the example VCD](assets/our_netlist_generates_same_waveform_as_examplevcd.png)
 
-**22 out of 22 checkpoints pass with 0 mismatches.** When we overlay our generated `sim_output.vcd` with Jane Street's `example_inputs.vcd` in GTKWave, the waveforms line up 100% identically
+**22 out of 22 checkpoints pass with 0 mismatches.** When we overlay our generated `sim_output.vcd` with Jane Street's `example_inputs.vcd` in GTKWave, the waveforms line up identically
 
-Our physical GDS extraction is officially confirmed to be **100% correct**.
+Our physical GDS extraction is officially confirmed to be correct.
 
 
 ## Testing Edge Cases (All Zeros & All Ones)
@@ -557,9 +557,9 @@ solver.add(block)
 unique = (solver.check() == z3.unsat)
 ```
 
-Z3 re-checked the entire $2^{121} \approx 2.65 \times 10^{36}$ state space and returned **`UNSAT` in 30 ms**!
+Z3 re-checked the entire $2^{121} \approx 2.65 \times 10^{36}$ state space and returned **`UNSAT`**
 
-This is a formal mathematical proof that our solution is **100% unique**.
+This is a formal mathematical proof that our solution is **unique**.
 
 ---
 
@@ -567,7 +567,7 @@ This is a formal mathematical proof that our solution is **100% unique**.
 
 Now for the final victory lap: 
 
-We replay the solved key through cycles $125 \to 140$ and read the 8 output wires `O[0 : 7]` on every clock edge:
+We replay the solved key through cycles $125 \to 140$ and read the 8 output wires `O[7:0]` on every clock edge:
 
 
 | Cycle | `success` | `O[7:0]` (Hex) | ASCII Char |
@@ -597,5 +597,5 @@ $$\mathbf{(*\ TWO\ STARS\ *)}$$
 
 # Finale
 
-From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse-engineered the entire ASIC from the ground up!
+From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse-engineered the entire ASIC from the ground up
 
