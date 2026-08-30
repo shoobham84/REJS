@@ -15,6 +15,8 @@ Link to the original Jane Street [blog](https://blog.janestreet.com/can-you-reve
 Hello! My name is Shubham, I am pursuing bachelors of technology in Computer Science at MAIT, Delhi, Batch 2025-2029.
 I like fiddling with hardware, software and everything that comes in between! 
 
+By the way, this is my first blog, my first capture the flag challenge, and also my first hardware related project. That's alot of firsts, haha
+
 # The Challenge
 Jane street released a new challenge for 2026, that was to reverse engineer an ASIC (Application Specific Integrated Circuit), which are integrated circuits customized for a particular use, given by them.
 
@@ -29,6 +31,7 @@ JS provided a [repository](https://github.com/janestreet/asic-puzzle-2026) with
 
 
 ![Layout of the puzzle](assets/layout.png)
+
 The physical layout of the circuit.
 
 # Quick Terminology Guide
@@ -41,7 +44,7 @@ Before diving into the reverse engineering, let's clarify the key terms we will 
 
 * **Ports vs. Instance Pins:**
   * **Port:** The named input/output terminal on a cell's blueprint (e.g. inputs `A`, `B`, and output `Y` for an AND gate).
-  * **Instance Pin:** The actual microscopic metal contact point on Layer 67 (`li1`) of a specific instance where wires attach. There are **2,791 instance pins** across our 728 gates.
+  * **Instance Pin:** The actual microscopic metal contact point on Layer 67 (`li1`) of a specific instance where wires attach. There are **2'791 instance pins** across our 728 gates.
 
 * **Metal Polygons vs. Interconnects (Vias):**
   * **Metal Polygons:** 2D horizontal metal shapes drawn on a single conductor layer (`li1`, `met1` ... `met5`). They act as horizontal hallways for electrons on that floor.
@@ -91,6 +94,7 @@ sky130 _ fd _ sc _ hd __ nand2 _ 2
 Viewing the `puzzle.gds` file in klayout shows us....
 
 ![Viewing puzzle.gds in klayout](assets/klayout.png)
+
 well...yeah this is quite a bit of a mess :,) Lets decode it
 
 -> On the left, we see the circuit, the circuit's true layout and how it would look if processed and manufactured in a semiconductor facility. 
@@ -110,14 +114,14 @@ Mapping the layers from the skywater 130nm pdk, we get a table of the physical l
 | prBoundary | 235 / 4 | Boundary | Die perimeter ($200.00 \times 353.60\,\mu\text{m}$) |
 | li1 (drawing) | 67 / 20 | Titanium Nitride (TiN) | Standard cell boundary pins and local intra-cell wiring |
 | li1 (pin label) | 67 / 5 | Text Annotations | Gate port names (A, B, X, CLK, D, Q, etc.) |
-| mcon (cut) | 67 / 44 | Tungsten Plug | Via cuts connecting li1 ↔ met1 (19,764 cuts) |
+| mcon (cut) | 67 / 44 | Tungsten Plug | Via cuts connecting li1 ↔ met1 (19'764 cuts) |
 | met1 (drawing) | 68 / 20 | Metal 1 (Al/Cu) | Horizontal routing tracks along standard cell rows |
-| via1 (cut) | 68 / 44 | Via 1 | Via cuts connecting met1 ↔ met2 (6,869 cuts) |
+| via1 (cut) | 68 / 44 | Via 1 | Via cuts connecting met1 ↔ met2 (6'869 cuts) |
 | met2 (drawing) | 69 / 20 | Metal 2 (Al/Cu) | Vertical routing tracks across standard cell rows |
-| via2 (cut) | 69 / 44 | Via 2 | Via cuts connecting met2 ↔ met3 (3,423 cuts) |
+| via2 (cut) | 69 / 44 | Via 2 | Via cuts connecting met2 ↔ met3 (3'423 cuts) |
 | met3 (drawing) | 70 / 20 | Metal 3 (Al/Cu) | Horizontal signal buses and Top-Level I/O Landing Pads |
 | met3 (pin label) | 70 / 5 | Text Annotations | Top-level I/O port names (clk, rst_n, enable, I, success, O[0..7]) |
-| via3 (cut) | 70 / 44 | Via 3 | Via cuts connecting met3 ↔ met4 (3,159 cuts) |
+| via3 (cut) | 70 / 44 | Via 3 | Via cuts connecting met3 ↔ met4 (3'159 cuts) |
 | met4 (drawing) | 71 / 20 | Metal 4 (Al/Cu) | Long-range vertical routing tracks (45 segments) |
 | via4 (cut) | 71 / 44 | Via 4 | Via cuts connecting met4 ↔ met5 (108 cuts) |
 | met5 (drawing) | 72 / 20 | Metal 5 (Al/Cu) | Global supply rails (18 segments) |
@@ -145,14 +149,15 @@ The only goal of parsing the GDS file is to find the connections of the circuit,
 
 We filter out the physical cells that contain no input or output pins (`tap..`, `decap..`, `diode..`, `fill..`). These cells are only for physical manufacturing and don't carry any logic signals. 
 
-Out of the 9,875 total placed cells in the raw GDS, filtering these leaves us with exactly **728 functional logic cells**.
+Out of the **9'875 total placed cells** in the raw GDS, filtering these leaves us with exactly **728 functional logic cells**.
 
-> The DBU: DataBaseUnits for this ASIC is nanometers.
+> The DBU: DataBaseUnits for this ASIC is nanometers ($1\,\text{DBU} = 1\,\text{nm}$).
 
-> The standard cell rows have fixed heights of 2720 DBU (2.72 um) and pitch width quantized in multiples of 460 DBU.
+> The standard cell rows have fixed heights of $2\text{'}720\,\text{DBU}$ ($2.72\,\mu\text{m}$) and pitch width quantized in multiples of $460\,\text{DBU}$ ($0.46\,\mu\text{m}$).
 
-> • Even rows are oriented normally (R0), spanning [y_0, y_0 + 2.72 um].  
-> • Odd rows are inverted (180 degree rotation R180 or reflected along X MX), spanning [y_0 - 2.72um, y_0].
+> • Even rows are oriented normally (R0), spanning $[y_0, y_0 + 2.72\,\mu\text{m}]$.  
+> • Odd rows are inverted (180 degree rotation R180 or reflected along X MX), spanning $[y_0 - 2.72\,\mu\text{m}, y_0]$.
+
 
 ### Storing our Cell Inventory (`parsedCells.json`)
 
@@ -182,16 +187,16 @@ Uniting the polygons will take place in two stages:
 
 We will be using a *Disjoint Set Union* for the following. 
 
-Layer Lk, adjacent layer Lk+1, interconnect polygon V, interconnect layer Ck
+Layer $L_k$, adjacent layer $L_{k+1}$, interconnect via polygon $V$, interconnect cut layer $C_k$:
    $$(P_{\text{below}} \cap V) \neq \emptyset \land (P_{\text{above}} \cap V) \neq \emptyset$$
    
 We flatten the design's structural hierarchy to the top-level cell; this moves all internal subcell polygons into a single global coordinate space, making polygon merging and spatial lookup much easier.
 
-> We parse a total of 12,615 merged continuous polygons across the 6 layers, acting as the nodes of the graph.
+> We parse a total of **12'615 merged continuous polygons** across the 6 layers, acting as the nodes of the graph.
 
-> We parse a total of 33,323 interconnects across the entire chip
+> We parse a total of **33'323 interconnects** across the entire chip.
 
-Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **4.2 * 10^8** operations
+Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **$4.2 \times 10^8$** operations!
 
 > This would take around *420 million* operations ($O(V \cdot P)$),, quite a hefty amount of minutes I'd say.
 
@@ -202,7 +207,7 @@ WELL I borrowed a really cool trick from video game collision engines! Enter...
 
 The idea is simple:
 
-1. We divide the silicon floorplan into a 2.0 * 2.0 um^2 spatial buckets. (`CELL_SIZE = 2000 DBU`)
+1. We divide the silicon floorplan into $2.0 \times 2.0\,\mu\text{m}^2$ spatial buckets (`CELL_SIZE = 2000 DBU`).
 
 2. For every merged polygon $P_i$ with bounding box $[x_{\text{min}}, y_{\text{min}}, x_{\text{max}}, y_{\text{max}}]$:
 
@@ -217,24 +222,24 @@ The idea is simple:
 
 $$\text{Candidates}(V) = \bigcup_{gx, gy \in \text{Cover}(V)} \text{grid}[(gx, gy)]$$
 
-This reduces candidate polygon evaluations from 12,615 down to 1–4 polygons per via, dropping the search complexity to $O(1)$ average time per cut.
+This reduces candidate polygon evaluations from 12'615 down to 1–4 polygons per via, dropping the search complexity to $O(1)$ average time per cut.
 
 We put the connected polygons across 12'615 nodes in the DSU.
 
-After processing all 33,323 via unions:
+After processing all 33'323 via unions:
 
-1. Iterate every node $u \in [0, 12614]$.
+1. Iterate every node $u \in [0, 12\text{'}614]$.
 2. Compute canonical representative root: $r = \text{DSU.find}(u)$.
 3. Assign contiguous integer Net IDs $0, 1, 2, \dots, 740$:
    $$\text{root_to_net}[r] \to \text{Net ID}$$
 
-> This gives us 741 totoal unique electrical nets.
+> This gives us 741 unique electrical nets.
 
 ### Pin Mapping 
 
 For each standard cell instance identified:
 
-1. We extract cell boundary pin text labels on layer (67, 5) (e.g. text "A" at local coordinate $(lx, ly)$.
+1. We extract cell boundary pin text labels on layer (67, 5) (e.g. text "A" at local coordinate $(lx, ly)$).
 2. Then transform local text coordinate to global die coordinate $(gx, gy)$.
 3. Query `spatial_grids[(67, 20)]` using point bounding box $[gx, gy, gx, gy]$.
 4. Perform exact point-in-polygon containment:
@@ -252,19 +257,18 @@ Now that the internal cell pins are mapped, we need to locate the **external chi
 In SkyWater 130 nm, top-level I/O pad text labels are placed on the highest global routing layer, **Metal 3** on layer `(70, 5)`:
 
 1. We scan all text shapes on layer `(70, 5)` in the top cell:
-   $$\text{Pad Labels} = \{\text{clk}, \text{rst\_n}, \text{enable}, \text{I}, \text{success}, \text{O}[0], \dots, \text{O}[7]\}$$
-
+   $$\text{Pad Labels} = \{\text{clk}, \text{rst_n}, \text{enable}, \text{I}, \text{success}, \text{O}[0], \dots, \text{O}[7]\}$$
 2. For each pad text at global coordinate $(gx, gy)$, we query `spatial_grids[(70, 20)]`.
-
 3. Then we check for point-in-polygon containment on the enclosing `met3` (70, 20) polygon:
    $$\text{Hit if: } P_{\text{bbox}}.\text{contains}(gx, gy) \land P_{\text{poly}}.\text{inside}(gx, gy)$$
-
 4. Finally, we assign the corresponding Net ID to each pad:
-   $$\text{pad_to_net}[\text{pad\_name}] = \text{get_net}(\text{offset}[(70, 20)] + \text{idx}(P_{\text{poly}}))$$
+   $$\text{pad_to_net}[\text{pad_name}] = \text{get_net}(\text{offset}[(70, 20)] + \text{idx}(P_{\text{poly}}))$$
 
 This maps all 13 top-level pads to their internal circuit nets:
 * **Inputs:** `clk` $\to$ `net_271`, `rst_n` $\to$ `net_73`, `enable` $\to$ `net_396`, `I` $\to$ `net_14`
 * **Outputs:** `success` $\to$ `net_77`, `O[0..7]` $\to$ `net_65`, `net_157`, `net_67`, `net_113`, `net_112`, `net_82`, `net_123`, `net_80`
+
+
 
 ---
 
@@ -334,7 +338,7 @@ I'll still provide a table to summarize the breakdown across the 728 functional 
 | OAI Gates | `o21a`, `o21ai`, `o22a`, `o31a`, etc. | 83 | $Y = \neg ((A_1 \lor A_2) \land B_1)$ |
 | Multiplexers | `mux2_1` | 21 | $X = \text{ite}(S, A_1, A_0)$ |
 | Constants | `conb_1` | 6 | $\text{HI} = \mathbf{1'b1}, \quad \text{LO} = \mathbf{1'b0}$ |
-| D-Flip-Flops | `dfrtp_2`, `dfstp_2`, `dfxtp_2` | 92 | $Q(t + 1) = \text{RESET\_B} \cdot D(t)$ |
+| D-Flip-Flops | `dfrtp_2`, `dfstp_2`, `dfxtp_2` | 92 | $Q(t + 1) = \text{RESET_B} \cdot D(t)$ |
 | **TOTAL** | | **728 cells** | **Complete Behavioral Foundation** |
 
 
@@ -349,7 +353,7 @@ A single coordinate rounding error, a flipped transistor row, or a misidentified
 
 To prove our netlist is electrically identical to the real IC, we need dynamic verification. 
 
-Luckil, Jane Street gave us `example_inputs.vcd`, a recording of the real chip in action. A `.vcd` (Value Change Dump) file is an IEEE 1364 standard ASCII trace that logs every digital signal transition with exact picosecond timestamps.
+Luckily, Jane Street gave us `example_inputs.vcd`, a recording of the real chip in action. A `.vcd` (Value Change Dump) file is an IEEE 1364 standard ASCII trace that logs every digital signal transition with exact picosecond timestamps.
 
 Let's open `example_inputs.vcd` in `GTKWave` to reverse engineer the chip's communication protocol
 
@@ -364,7 +368,7 @@ Looking at the signal traces in GTKWave reveals the entire hardware protocol:
 ### 1. Clock Frequency: 100 MHz
 ![Clock frequency is 100 MHz, period 10 ns](assets/freq.png)
 
-Zooming in on the `clk` signal, we measure a clock period of **10,000 ps (10 ns)** (5,000 ps LOW, 5,000 ps HIGH). This means the ASIC runs at **100 MHz**.
+Zooming in on the `clk` signal, we measure a clock period of **$10\text{'}000\,\text{ps}$ ($10\,\text{ns}$)** ($5\text{'}000\,\text{ps}$ LOW, $5\text{'}000\,\text{ps}$ HIGH). This means the ASIC runs at **$100\,\text{MHz}$**.
 
 ### 2. Active Low Reset (Cycles 0 to 2)
 ![Reset signal stays LOW for first 3 clock cycles then goes HIGH](assets/rst_stays_low_for_3_first_clock_cycles_then_goes_HIGH.png)
@@ -457,7 +461,7 @@ In both cases, `success` remained `0`, as was expected.
 
 # Finding the hidden key
 
-The chip requires a 121 bit serial input bitstream to assert `sucess = 1`, this means there are 2^121 possible input vectors, thats around 2.65 * 10 ^ 36 possible inputs, calculating this using brute force would take *years* <sub>damn</sub>
+The chip requires a 121 bit serial input bitstream to assert `success == 1`, this means there are $2^{121}$ possible input vectors, that's around $2.65 \times 10^{36}$ possible inputs, calculating this using brute force would take *years* <sub>damn</sub>
 
 What do we do then? I *cough* <i>googled</i> *cough* a little and well..
 
@@ -486,6 +490,7 @@ However, standard SAT solvers are designed for **combinational circuits** (memor
    (or $\mathbf{1}$ for `dfstp` set flip-flops).
 
 By chaining 126 clock cycles together, we convert a 126-cycle sequential circuit into one massive Boolean formula
+
 
 ---
 
