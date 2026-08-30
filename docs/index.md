@@ -455,4 +455,147 @@ When shifting in 121 consecutive ones, the chip outputs: **`"BIG BANG"`**
 
 In both cases, `success` remained `0`, as was expected.
 
+# Finding the hidden key
+
+The chip requires a 121 bit serial input bitstream to assert `sucess = 1`, this means there are 2^121 possible input vectors, thats around 2.65 * 10 ^ 36 possible inputs, calculating this using brute force would take *years* <sub>damn</sub>
+
+What do we do then? I *cough* <i>googled</i> *cough* a little and well 
+
+<img src="assets/whatdoido1.png" alt="schewpid sat meme" style="max-width: 50%; height: auto; display: block; margin: 1.5rem auto;" />
+
+*ight*, Z3 as a SAT solver it is.
+
+---
+
+## What is a SAT Solver & Why Do We Need Time Unrolling?
+
+A **Boolean Satisfiability (SAT) Solver** is a mathematical engine that takes a complex formulae of boolean variables ($\text{AND}, \text{OR}, \text{NOT}, \text{XOR}$) and figures out if there is any combination of True/False inputs that makes the entire formula True
+
+For our chip, we want to ask what 121 inputs make `success == True`
+
+However, standard SAT solvers are designed for **combinational circuits** (memoryless logic). Our ASIC is a **sequential circuit** with 92 D-Flip-Flops that remember state across clock cycles.
+
+### To solve this, we use a technique called **Bounded Model Checking / Time-Unrolling**:
+
+1. **Combinational Gates (Evaluated within cycle $t$):**
+   Combinational gates (AND, OR, MUX, AOI/OAI) have no memory. We sort all 636 gates in dependency order using **Kahn's Topological Sort Algorithm** and evaluate their Boolean transfer functions cycle by cycle.
+
+2. **Flip-Flops (State carried from $t \to t+1$):**
+   Flip-flops carry state across time boundaries:
+   $$Q(t+1) = \text{If}(\neg \text{rst\_n}(t), \mathbf{0}, D(t))$$
+   (or $\mathbf{1}$ for `dfstp` set flip-flops).
+
+By chaining 126 clock cycles together, we convert a 126-cycle sequential circuit into one massive Boolean formula!
+
+---
+
+## Formulating the Puzzle in Microsoft's Z3 
+
+We implement the solver in Python using Microsoft Research's **`z3-solver`** library.
+
+### Declaring Symbolic Variables
+
+Instead of passing concrete `0`s or `1`s, we create **121 free symbolic Boolean variables**:
+
+```python
+I_vars = [z3.Bool(f"I_{k}") for k in range(121)]
+```
+
+
+### Driving the Circuit across 126 Cycles
+
+We unroll the circuit over time, feeding $I_{t-3}$ into input pin `I` during cycles $3 \le t \le 123$:
+
+```python
+def get_input(t):
+    if t <= 1:
+        return z3.BoolVal(False), z3.BoolVal(False), z3.BoolVal(False) # reset active
+    rst = z3.BoolVal(True)
+    if 3 <= t <= 123:
+        return rst, z3.BoolVal(True), I_vars[t - 3] # shift key bits
+    return rst, z3.BoolVal(False), z3.BoolVal(False) # gap cycle
+```
+
+
+### Asserting the Winning Condition
+
+At cycle $t = 125$, we grab the symbolic boolean expression for `success` and tell Z3 to solve it:
+
+```python
+success_expr = wire_maps[125][pad["success"]]
+
+solver = z3.Solver()
+solver.add(success_expr == z3.BoolVal(True))
+
+print("solving")
+res = solver.check()
+
+```
+
+# Getting the final answer
+
+Running Z3 solves the entire 121-bit key.
+
+The final key being *drumrolls*
+
+$$\text{KEY} = \mathbf{0000000101010000100000000000010101010000000000001010000001000001000000100000101000010000000100000010000010010001010000000}$$
+
+---
+
+## Proving Mathematical Uniqueness
+
+One major thing we need to ensure is to ensure that this key is the **ONLY** one solution.
+
+We can prove uniqueness mathematically using a **blocking clause**. We tell Z3 *find ANY solution where the inputs are NOT equal to our recovered key.*
+
+```python
+# blocking clause: at least one bit must differ from our recovered key
+block = z3.Or([v != z3.BoolVal(bool(b)) for v, b in zip(I_vars, key)])
+solver.add(block)
+
+# If UNSAT (unsatisfiable), no other solution can possibly exist
+unique = (solver.check() == z3.unsat)
+```
+
+Z3 re-checked the entire $2^{121} \approx 2.65 \times 10^{36}$ state space and returned **`UNSAT` in 30 ms**!
+
+This is a formal mathematical proof that our solution is **100% unique**.
+
+---
+
+# Decrypting the FINAL SECRET FLAG
+
+Now for the final victory lap: 
+
+We replay the solved key through cycles $125 \to 140$ and read the 8 output wires `O[0 : 7]` on every clock edge:
+
+
+| Cycle | `success` | `O[7:0]` (Hex) | ASCII Char |
+| :---: | :---: | :---: | :---: |
+| 125 | 1 | `0x28` | `'('` |
+| 126 | 1 | `0x2A` | `'*'` |
+| 127 | 1 | `0x20` | `' '` |
+| 128 | 1 | `0x54` | `'T'` |
+| 129 | 1 | `0x57` | `'W'` |
+| 130 | 1 | `0x4F` | `'O'` |
+| 131 | 1 | `0x20` | `' '` |
+| 132 | 1 | `0x53` | `'S'` |
+| 133 | 1 | `0x54` | `'T'` |
+| 134 | 1 | `0x41` | `'A'` |
+| 135 | 1 | `0x52` | `'R'` |
+| 136 | 1 | `0x53` | `'S'` |
+| 137 | 1 | `0x20` | `' '` |
+| 138 | 1 | `0x2A` | `'*'` |
+| 139 | 1 | `0x29` | `')'` |
+| 140 | 1 | `0x00` | `'.'` |
+
+Putting it all together gives us the secret flag:
+
+$$\mathbf{(*\ TWO\ STARS\ *)}$$
+
+---
+
+# Finale
+
+From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse-engineered the entire ASIC from the ground up!
 
