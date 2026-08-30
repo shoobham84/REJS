@@ -459,9 +459,9 @@ In both cases, `success` remained `0`, as was expected.
 
 The chip requires a 121 bit serial input bitstream to assert `sucess = 1`, this means there are 2^121 possible input vectors, thats around 2.65 * 10 ^ 36 possible inputs, calculating this using brute force would take *years* <sub>damn</sub>
 
-What do we do then? I *cough* <i>googled</i> *cough* a little and well 
+What do we do then? I *cough* <i>googled</i> *cough* a little and well..
 
-<img src="assets/whatdoido1.png" alt="schewpid sat meme" style="max-width: 50%; height: auto; display: block; margin: 1.5rem auto;" />
+![schewpid sat meme](assets/whatdoido1.png)
 
 *ight*, Z3 as a SAT solver it is.
 
@@ -482,10 +482,10 @@ However, standard SAT solvers are designed for **combinational circuits** (memor
 
 2. **Flip-Flops (State carried from $t \to t+1$):**
    Flip-flops carry state across time boundaries:
-   $$Q(t+1) = \text{If}(\neg \text{rst\_n}(t), \mathbf{0}, D(t))$$
+   $$Q(t+1) = \text{If}(\neg \text{rst_n}(t), \mathbf{0}, D(t))$$
    (or $\mathbf{1}$ for `dfstp` set flip-flops).
 
-By chaining 126 clock cycles together, we convert a 126-cycle sequential circuit into one massive Boolean formula!
+By chaining 126 clock cycles together, we convert a 126-cycle sequential circuit into one massive Boolean formula
 
 ---
 
@@ -536,7 +536,7 @@ res = solver.check()
 
 Running Z3 solves the entire 121-bit key.
 
-The final key being *drumrolls*
+The final key being.... *drumrolls*
 
 $$\text{KEY} = \mathbf{0000000101010000100000000000010101010000000000001010000001000001000000100000101000010000000100000010000010010001010000000}$$
 
@@ -597,5 +597,5 @@ $$\mathbf{(*\ TWO\ STARS\ *)}$$
 
 # Finale
 
-From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse-engineered the entire ASIC from the ground up
+From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse engineered the entire ASIC from the ground up
 
