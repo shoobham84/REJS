@@ -72,6 +72,22 @@ Inspecting the chip in either klayout or python tells us that the chip uses the 
 
 SkyWater 130 nm PDK is [open source](https://github.com/google/skywater-pdk), the documentation is easily accessible [here](https://skywater-pdk.readthedocs.io/en/main/index.html). 
 
+A basic breakdown of the skywater130 standard cell looks like this:
+
+```text
+sky130_fd_sc_hd__<function>_<drive_strength>
+
+sky130 _ fd _ sc _ hd __ nand2 _ 2
+  │       │    │    │      │     └── Drive Strength: 2x transistor width (higher fanout capability)
+  │       │    │    │      └──────── Logic Function: 2-input NAND
+  │       │    │    └─────────────── Library Variant: High Density (2.72 um row pitch)
+  │       │    └──────────────────── Standard Cell
+  │       └───────────────────────── Foundry: SkyWater
+  └────────────────────────────────── Process Node: 130 nm
+```
+
+
+
 Viewing the `puzzle.gds` file in klayout shows us....
 
 ![Viewing puzzle.gds in klayout](assets/klayout.png)
@@ -292,3 +308,32 @@ With both instance pins and top-level I/O pads mapped to their Net IDs, we can f
    ```
 
 The output is written directly to `outputs/extracted_netlist.v`. We have officially extracted a complete and fully connected gate-level Verilog netlist straight from the polygons!
+
+
+## Modelling Gate Behaviour and dealing with PDK Semantics
+
+We have gotten the verilog netlist, but trying to compile this netlist alone without the logical definitions behind the SkyWater130 nm cells would not work.
+
+What we do to fix this, is we create a Verilog file called `sky130_cells.v` which provides the behavioural simulation models for all the SkyWater cell types, derived from the official documentation.
+
+I'll be honest, these standard cell definitions were generated directly from the official SkyWater PDK specifications with the heavy usage of LLMs, writing all those logic behaviours by hand would've been extremely tedious.
+
+I'll still provide a table to summarize the breakdown across the 728 functional standard cells instantiated in sky130_cells.v:
+
+
+| Cell Class | Cell Name Examples | Instances | Transfer Function $f(\text{Inputs})$ |
+| :--- | :--- | :---: | :--- |
+| Inverters | `inv_2` | 25 | $Y = \neg A$ |
+| Buffers | `buf_2`, `clkbuf_4/8/16` | 33 | $X = A$ |
+| NAND Gates | `nand2/3/4_2`, `nand2b/3b_2` | 81 | $Y = \neg \left( \bigwedge A_i \right)$ |
+| NOR Gates | `nor2/3/4_2`, `nor3b/4b_2` | 62 | $Y = \neg \left( \bigvee A_i \right)$ |
+| AND Gates | `and2/3/4_2`, `and2b/3b/4b/4bb_2` | 103 | $X = \bigwedge A_i$ |
+| OR Gates | `or2/3/4_2`, `or3b/4b/4bb_2` | 52 | $X = \bigvee A_i$ |
+| XOR / XNOR | `xor2_2`, `xnor2_2` | 50 | $X = A \oplus B, \quad Y = \neg(A \oplus B)$ |
+| AOI Gates | `a21o`, `a21oi`, `a22o`, `a31o`, etc. | 120 | $Y = \neg ((A_1 \land A_2) \lor B_1)$ |
+| OAI Gates | `o21a`, `o21ai`, `o22a`, `o31a`, etc. | 83 | $Y = \neg ((A_1 \lor A_2) \land B_1)$ |
+| Multiplexers | `mux2_1` | 21 | $X = \text{ite}(S, A_1, A_0)$ |
+| Constants | `conb_1` | 6 | $\text{HI} = \mathbf{1'b1}, \quad \text{LO} = \mathbf{1'b0}$ |
+| D-Flip-Flops | `dfrtp_2`, `dfstp_2`, `dfxtp_2` | 92 | $Q(t + 1) = \text{RESET\_B} \cdot D(t)$ |
+| **TOTAL** | | **728 cells** | **Complete Behavioral Foundation** |
+
