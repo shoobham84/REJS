@@ -1,6 +1,11 @@
 # Reverse Engineering Jane Street's ASIC (2026 Challenge) (REJS)
 End-to-end automated reverse-engineering, dynamic waveform simulation, and formal Z3 SAT solver pipeline for the SkyWater 130nm ASIC puzzle.
 
+The write-up for this project/challenge/CTF/thingy can be found below:
+
+https://shoobham84.github.io/REJS/
+
+
 ## Prerequisites & Dependencies
 
 ### 1. System Packages
