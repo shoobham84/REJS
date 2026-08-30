@@ -17,6 +17,8 @@ I like fiddling with hardware, software and everything that comes in between!
 
 By the way, this is my first blog, my first capture the flag challenge, and also my first hardware related project. That's alot of firsts, haha
 
+---
+
 # The Challenge
 Jane street released a new challenge for 2026, that was to reverse engineer an ASIC (Application Specific Integrated Circuit), which are integrated circuits customized for a particular use, given by them.
 
@@ -34,9 +36,12 @@ JS provided a [repository](https://github.com/janestreet/asic-puzzle-2026) with
 
 The physical layout of the circuit.
 
+---
+
 # Quick Terminology Guide
 
 Before diving into the reverse engineering, let's clarify the key terms we will be tossing around so everyone is on the same page:
+
 
 * **Cells vs. Instances:**
   * **Cell (Master Blueprint):** A standard library template (e.g. `sky130_fd_sc_hd__nand2_2`). Think of it as a LEGO block design in the manual.
@@ -64,7 +69,7 @@ sky130_nand2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
 //  Cell      Instance    Nets (continuous 3D wires)
 ```
 
-
+---
 
 # RE'ing it!
 
@@ -126,7 +131,7 @@ Mapping the layers from the skywater 130nm pdk, we get a table of the physical l
 | via4 (cut) | 71 / 44 | Via 4 | Via cuts connecting met4 ↔ met5 (108 cuts) |
 | met5 (drawing) | 72 / 20 | Metal 5 (Al/Cu) | Global supply rails (18 segments) |
 
-
+---
 
 ## The Plan
 
@@ -141,6 +146,7 @@ The plan is pretty simple, it'll go in steps:
 7. ???
 8. Profit! Uh- I mean we get the hidden flag!
 
+---
 
 ## Parsing the GDS File
 
@@ -177,11 +183,14 @@ sky130_fd_sc_hd__nand2_2 inst_42 (.A(net_15), .B(net_88), .Y(net_104));
 
 To know where a pin actually lands on the full die, we take the local pin coordinates from inside the cell definition and apply an **affine transformation** (`inst.cplx_trans` in `pya`). This handles the rotation, row-mirroring, and (x, y) displacement to find the exact global (X, Y) spot on the silicon die where the wire connects.
 
+---
+
 ## Its Union Time! <sub>*\*starts unionising all over the place\**</sub>
 
 <img src="assets/schewpid_polygon_meme.png" alt="schewpid union meme" style="max-width: 50%; height: auto; display: block; margin: 1.5rem auto;" />
  
 Uniting the polygons will take place in two stages:
+
 - Intra-layer: shapes overlapping or touching the same conductor layer are electrically connected
 - Inter-layer: shapes on adjacent layers are electrically connected iff they are bridged by a physical interconnect (`mcon`s or `via`s)
 
@@ -313,6 +322,7 @@ With both instance pins and top-level I/O pads mapped to their Net IDs, we can f
 
 The output is written directly to `outputs/extracted_netlist.v`. We have officially extracted a complete and fully connected gate-level Verilog netlist straight from the polygons
 
+---
 
 ## Modelling Gate Behaviour and dealing with PDK Semantics
 
@@ -344,6 +354,7 @@ I'll still provide a table to summarize the breakdown across the 728 functional 
 
 The extracted netlist is fully runnable under standard digital simulators now using the behavioural primitives we have gotten.
 
+---
 
 ## But is our generated netlist even correct?
 
@@ -389,6 +400,7 @@ At $t = 1250\,\text{ns}$ (cycle 125), `enable` drops back to **LOW**. The chip f
 
 For the wrong test inputs in the example, `success` stays **0**, and `O[7:0]` spells out **`"TRY AGAIN"`**.
 
+---
 
 ## Verifying Our Extracted Netlist (`testbench_vcd_verifier.v`)
 
@@ -440,6 +452,7 @@ Errors:       0
 
 Our physical GDS extraction is officially confirmed to be correct.
 
+---
 
 ## Testing Edge Cases (All Zeros & All Ones)
 
@@ -458,6 +471,8 @@ When shifting in 121 consecutive zeros, the chip outputs the easter egg string: 
 When shifting in 121 consecutive ones, the chip outputs: **`"BIG BANG"`**
 
 In both cases, `success` remained `0`, as was expected.
+
+---
 
 # Finding the hidden key
 
@@ -490,7 +505,6 @@ However, standard SAT solvers are designed for **combinational circuits** (memor
    (or $\mathbf{1}$ for `dfstp` set flip-flops).
 
 By chaining 126 clock cycles together, we convert a 126-cycle sequential circuit into one massive Boolean formula
-
 
 ---
 
@@ -603,4 +617,5 @@ $$\mathbf{(*\ TWO\ STARS\ *)}$$
 # Finale
 
 From raw geometric polygons in a GDSII stream file, to a 3D DSU spatial netlist, to dynamic Icarus Verilog waveform simulation, and finally to formal Z3 SAT cryptanalysis; we successfully reverse engineered the entire ASIC from the ground up
+
 
