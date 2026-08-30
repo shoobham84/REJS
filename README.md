@@ -14,7 +14,7 @@ pip install z3-solver klayout
 ## Setup
 Clone the repository:
 ```bash
-git clone https://github.com/<your-username>/REJS.git
+git clone https://github.com/shoobham84/REJS.git
 cd REJS
 ```
 
