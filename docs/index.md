@@ -191,7 +191,7 @@ We flatten the design's structural hierarchy to the top-level cell; this moves a
 
 > We parse a total of 33,323 interconnects across the entire chip
 
-Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **4.2 * 10^8** operations!
+Okayyyy, so we have 12'615 metal polygons and 33'323 interconnects, checking *every* interconnect against *every* polygon would take around **4.2 * 10^8** operations
 
 > This would take around *420 million* operations ($O(V \cdot P)$),, quite a hefty amount of minutes I'd say.
 
@@ -307,7 +307,7 @@ With both instance pins and top-level I/O pads mapped to their Net IDs, we can f
    sky130_fd_sc_hd__dfrtp_2 inst_26 (.CLK(net_271), .D(net_74), .Q(net_44), .RESET_B(net_73));
    ```
 
-The output is written directly to `outputs/extracted_netlist.v`. We have officially extracted a complete and fully connected gate-level Verilog netlist straight from the polygons!
+The output is written directly to `outputs/extracted_netlist.v`. We have officially extracted a complete and fully connected gate-level Verilog netlist straight from the polygons
 
 
 ## Modelling Gate Behaviour and dealing with PDK Semantics
@@ -336,4 +336,123 @@ I'll still provide a table to summarize the breakdown across the 728 functional 
 | Constants | `conb_1` | 6 | $\text{HI} = \mathbf{1'b1}, \quad \text{LO} = \mathbf{1'b0}$ |
 | D-Flip-Flops | `dfrtp_2`, `dfstp_2`, `dfxtp_2` | 92 | $Q(t + 1) = \text{RESET\_B} \cdot D(t)$ |
 | **TOTAL** | | **728 cells** | **Complete Behavioral Foundation** |
+
+
+The extracted netlist is fully runnable under standard digital simulators now using the behavioural primitives we have gotten.
+
+
+## But is our generated netlist even correct?
+
+You can never assume an extracted netlist is correct *just* because it compiles.
+
+A single coordinate rounding error, a flipped transistor row, or a misidentified interconnect can silently produce a netlist that compiles cleanly but is functionally invalid.
+
+To prove our netlist is electrically identical to the real IC, we need dynamic verification. 
+
+Luckil, Jane Street gave us `example_inputs.vcd`, a recording of the real chip in action. A `.vcd` (Value Change Dump) file is an IEEE 1364 standard ASCII trace that logs every digital signal transition with exact picosecond timestamps.
+
+Let's open `example_inputs.vcd` in `GTKWave` to reverse engineer the chip's communication protocol
+
+---
+
+## Reverse-Engineering the Protocol in GTKWave
+
+![Opening example_inputs.vcd in GTKWave](assets/opening_example_inputs_vcd_showsusthis.png)
+
+Looking at the signal traces in GTKWave reveals the entire hardware protocol:
+
+### 1. Clock Frequency: 100 MHz
+![Clock frequency is 100 MHz, period 10 ns](assets/freq.png)
+
+Zooming in on the `clk` signal, we measure a clock period of **10,000 ps (10 ns)** (5,000 ps LOW, 5,000 ps HIGH). This means the ASIC runs at **100 MHz**.
+
+### 2. Active Low Reset (Cycles 0 to 2)
+![Reset signal stays LOW for first 3 clock cycles then goes HIGH](assets/rst_stays_low_for_3_first_clock_cycles_then_goes_HIGH.png)
+
+The `rst_n` pin is held **LOW (0)** for the first 3 clock cycles ($0 \to 30\,\text{ns}$), initializing all internal flipflops and state counters. At $t = 30\,\text{ns}$ (cycle 3), `rst_n` goes **HIGH (1)**, releasing the chip from reset.
+
+### 3. The 121 Bit Serial Shift In (Cycles 4 to 124)
+![Enable goes HIGH for 121 cycles at 40 ns till 1250 ns](assets/enable_goes_HIGH_at_40ns_and_stays_HIGH_for_121_cycles_till_1250ns_then_enable_dropsto0_and_then_output70_is_streamed.png)
+
+At $t = 40\,\text{ns}$ (cycle 4), the `enable` signal goes **HIGH** and stays active for exactly **121 clock cycles** until $t = 1250\,\text{ns}$. During these 121 cycles, one bit is shifted into input pin `I` on every rising clock edge. 
+
+This gives us our biggest clue: **the secret hardware key is exactly 121 serial bits long**
+
+### 4. Output Streaming & Failure Response (Cycle 125+)
+![Try again signal on wrong example inputs](assets/tryagain.png)
+
+At $t = 1250\,\text{ns}$ (cycle 125), `enable` drops back to **LOW**. The chip finishes evaluating the key, and the 8 bit output bus `O[7:0]` begins streaming ASCII characters on every subsequent clock edge. 
+
+For the wrong test inputs in the example, `success` stays **0**, and `O[7:0]` spells out **`"TRY AGAIN"`**.
+
+
+## Verifying Our Extracted Netlist (`testbench_vcd_verifier.v`)
+
+Now we put our extracted netlist to the test:
+
+We create a Verilog testbench (`test/testbench_vcd_verifier.v`) that instantiates our `puzzle_extracted` module alongside `sky130_cells.v`. The testbench feeds the exact same clock toggles, reset pulse, and 121 input bits from the example into our netlist, compiles it with Icarus Verilog (`iverilog`), and logs the output to `outputs/sim_output.vcd`.
+
+```bash
+iverilog -g2012 -o outputs/sim_verify src/sky130_cells.v outputs/extracted_netlist.v test/testbench_vcd_verifier.v
+vvp outputs/sim_verify
+```
+
+Here is what we get in the terminal:
+
+```text
+-- Verifying netlist against golden VCD
+VCD info: dumpfile outputs/sim_output.vcd opened for output.
+  OK t=5001: O=0x00 ('.')
+  OK t=1255001: O=0x54 ('T')
+  OK t=1265001: O=0x52 ('R')
+  OK t=1275001: O=0x59 ('Y')
+  OK t=1285001: O=0x20 (' ')
+  OK t=1295001: O=0x41 ('A')
+  OK t=1305001: O=0x47 ('G')
+  OK t=1315001: O=0x41 ('A')
+  OK t=1325001: O=0x49 ('I')
+  OK t=1335001: O=0x4e ('N')
+  OK t=1345001: O=0x00 ('.')
+  OK t=2815001: O=0x54 ('T')
+  OK t=2825001: O=0x52 ('R')
+  OK t=2835001: O=0x59 ('Y')
+  OK t=2845001: O=0x20 (' ')
+  OK t=2855001: O=0x41 ('A')
+  OK t=2865001: O=0x47 ('G')
+  OK t=2875001: O=0x41 ('A')
+  OK t=2885001: O=0x49 ('I')
+  OK t=2895001: O=0x4e ('N')
+  OK t=2905001: O=0x00 ('.')
+
+ VERIFICATION COMPLETE ===----------------------
+Total checks: 22
+Errors:       0
+ PASS - our netlist matches example_inputs.vcd perfectly
+```
+
+![Our netlist generates the exact same waveform as the example VCD](assets/our_netlist_generates_same_waveform_as_examplevcd.png)
+
+**22 out of 22 checkpoints pass with 0 mismatches.** When we overlay our generated `sim_output.vcd` with Jane Street's `example_inputs.vcd` in GTKWave, the waveforms line up 100% identically
+
+Our physical GDS extraction is officially confirmed to be **100% correct**.
+
+
+## Testing Edge Cases (All Zeros & All Ones)
+
+Before jumping into heavy mathematical SAT solvers, we test simple edge case inputs like all 121 zeros or all 121 ones
+
+We wrote a dedicated testbench (`test/all_zeros_and_ones.v`) to test both:
+
+### 1. All 121 Zeros $\implies$ `"EMPTY SKY"`
+![All zeros input produces EMPTY SKY](assets/all_zeros.png)
+
+When shifting in 121 consecutive zeros, the chip outputs the easter egg string: **`"EMPTY SKY"`**
+
+### 2. All 121 Ones $\implies$ `"BIG BANG"`
+![All ones input produces BIG BANG](assets/all_ones.png)
+
+When shifting in 121 consecutive ones, the chip outputs: **`"BIG BANG"`**
+
+In both cases, `success` remained `0`, as was expected.
+
 
