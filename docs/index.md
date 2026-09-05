@@ -482,7 +482,7 @@ What do we do then? I *cough* <i>googled</i> *cough* a little and well..
 
 ![schewpid sat meme](assets/whatdoido1.png)
 
-*ight*, Z3 as a SAT solver it is.
+*ight*, Z3 (which is an SMT solver) as a SAT solver it is.
 
 ---
 
@@ -576,7 +576,7 @@ solver.add(block)
 unique = (solver.check() == z3.unsat)
 ```
 
-Z3 re-checked the entire $2^{121} \approx 2.65 \times 10^{36}$ state space and returned **`UNSAT`**
+Asserting a blocking clause to exclude the discovered key returned UNSAT, which guarantees uniqueness without having to brute-force $2^{121} \approx 2.65 \times 10^{36}$ assignments.
 
 This is a formal mathematical proof that our solution is **unique**.
 
